@@ -1,5 +1,5 @@
-const { verifyAccess } = require("../utils/jwt");
-const AppError = require("../utils/AppError");
+import { verifyAccess } from "../utils/jwt.js";
+import AppError from "../utils/AppError.js";
 
 const authenticate = (req, res, next) => {
   const header = req.headers.authorization;
@@ -21,4 +21,4 @@ const authenticate = (req, res, next) => {
   }
 };
 
-module.exports = authenticate;
+export default authenticate;

@@ -1,7 +1,4 @@
-const AppError = require("../utils/AppError");
-
-module.exports = (err, req, res, next) => {
-  // PostgreSQL error codes
+const errorHandler = (err, req, res, next) => {
   if (err.code === "23505")
     return res
       .status(409)
@@ -24,3 +21,5 @@ module.exports = (err, req, res, next) => {
   console.error(`[ERROR] ${req.method} ${req.originalUrl} — ${err.message}`);
   res.status(statusCode).json({ status: "error", message });
 };
+
+export default errorHandler;

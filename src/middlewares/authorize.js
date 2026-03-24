@@ -1,4 +1,4 @@
-const AppError = require("../utils/AppError");
+import AppError from "../utils/AppError.js";
 
 const authorize =
   (...roles) =>
@@ -8,4 +8,4 @@ const authorize =
     next();
   };
 
-module.exports = authorize;
+export default authorize;
