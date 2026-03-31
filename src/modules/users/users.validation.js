@@ -15,4 +15,4 @@ export const updateRules = [
     .optional()
     .isLength({ min: 8 })
     .withMessage("Password minimal 8 karakter"),
-];w
+];
