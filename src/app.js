@@ -40,17 +40,16 @@ app.use(morgan(process.env.NODE_ENV === "production" ? "combined" : "dev"));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// ─── Swagger UI ───────────────────────────────────────────────────
 app.use(
   "/api/docs",
   swaggerUi.serve,
   swaggerUi.setup(swaggerSpec, {
-    customSiteTitle: "Sejajar CMS API Docs",
+    customSiteTitle: "Sejajar API Docs",
     customCss: `
     .swagger-ui .topbar { background-color: #1a1a2e; }
     .swagger-ui .topbar-wrapper img { display: none; }
     .swagger-ui .topbar-wrapper::after {
-      content: 'Sejajar CMS API';
+      content: 'Documentation';
       color: white;
       font-size: 1.2rem;
       font-weight: bold;
@@ -65,7 +64,6 @@ app.use(
   }),
 );
 
-// Endpoint untuk download raw JSON spec (berguna untuk Postman import)
 app.get("/api/docs.json", (req, res) => {
   res.setHeader("Content-Type", "application/json");
   res.send(swaggerSpec);

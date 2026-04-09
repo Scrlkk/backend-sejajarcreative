@@ -9,7 +9,7 @@ const options = {
   definition: {
     openapi: "3.0.0",
     info: {
-      title: "Sejajar CMS API",
+      title: "Sejajar API Docs",
       version: "1.0.0",
       description: `
 ## Sejajar Content Management System — REST API
@@ -19,9 +19,9 @@ API ini digunakan untuk mengelola seluruh operasional konten, project, tim, dan 
 ### Autentikasi
 Semua endpoint (kecuali \`/auth/login\`) membutuhkan **Bearer Token**.
 
-1. Login melalui \`POST /api/auth/login\`
-2. Salin \`accessToken\` dari response
-3. Klik tombol **Authorize** di atas, masukkan: \`Bearer <accessToken>\`
+1. #### Login melalui \`POST /api/auth/login\`
+2. #### Salin \`accessToken\` dari response
+3. #### Klik tombol **Authorize** di atas, masukkan: \`Bearer <accessToken>\`
 
 ### Role Hierarchy
 \`\`\`
@@ -38,10 +38,10 @@ superadmin → owner → content_lead → content_editor / script_writer / admin
         url: "http://localhost:3000",
         description: "Development server",
       },
-      {
-        url: "https://api.sejajar.id",
-        description: "Production server",
-      },
+      // {
+      //   url: "https://api.sejajar.id",
+      //   description: "Production server",
+      // },
     ],
 
     // ─── Global Security ───────

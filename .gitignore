@@ -145,3 +145,6 @@ vite.config.ts.timestamp-*
 
 # Readme files
 notes/
+
+# Hashing files
+scripts/

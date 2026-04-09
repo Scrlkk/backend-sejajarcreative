@@ -2,9 +2,7 @@
 -- Seed: Default users
 -- Password semua akun: Admin@12345
 -- Hash bcrypt rounds=10:
---   $2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi
---
--- PENTING: Ganti password segera setelah login pertama di production
+--   $2b$10$A5wU1yoYCwDHMomBu2ftEeGgHhCToCDqjbg.5HbToEnjGqSi7Uc7K
 -- ─────────────────────────────────────────────────────────────────
 
 INSERT INTO core.users (full_name, email, password, role) VALUES
@@ -13,7 +11,7 @@ INSERT INTO core.users (full_name, email, password, role) VALUES
   (
     'Super Admin',
     'superadmin@sejajar.id',
-    '$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi',
+    '$2b$10$A5wU1yoYCwDHMomBu2ftEeGgHhCToCDqjbg.5HbToEnjGqSi7Uc7K',
     'superadmin'
   ),
 
@@ -21,7 +19,7 @@ INSERT INTO core.users (full_name, email, password, role) VALUES
   (
     'Owner Sejajar',
     'owner@sejajar.id',
-    '$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi',
+    '$2b$10$A5wU1yoYCwDHMomBu2ftEeGgHhCToCDqjbg.5HbToEnjGqSi7Uc7K',
     'owner'
   ),
 
@@ -29,7 +27,7 @@ INSERT INTO core.users (full_name, email, password, role) VALUES
   (
     'Content Lead',
     'contentlead@sejajar.id',
-    '$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi',
+    '$2b$10$A5wU1yoYCwDHMomBu2ftEeGgHhCToCDqjbg.5HbToEnjGqSi7Uc7K',
     'content_lead'
   ),
 
@@ -37,7 +35,7 @@ INSERT INTO core.users (full_name, email, password, role) VALUES
   (
     'Content Editor',
     'editor@sejajar.id',
-    '$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi',
+    '$2b$10$A5wU1yoYCwDHMomBu2ftEeGgHhCToCDqjbg.5HbToEnjGqSi7Uc7K',
     'content_editor'
   ),
 
@@ -45,7 +43,7 @@ INSERT INTO core.users (full_name, email, password, role) VALUES
   (
     'Script Writer',
     'writer@sejajar.id',
-    '$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi',
+    '$2b$10$A5wU1yoYCwDHMomBu2ftEeGgHhCToCDqjbg.5HbToEnjGqSi7Uc7K',
     'script_writer'
   ),
 
@@ -53,7 +51,7 @@ INSERT INTO core.users (full_name, email, password, role) VALUES
   (
     'Admin Sosmed',
     'sosmed@sejajar.id',
-    '$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi',
+    '$2b$10$A5wU1yoYCwDHMomBu2ftEeGgHhCToCDqjbg.5HbToEnjGqSi7Uc7K',
     'admin_social_media'
   )
 
