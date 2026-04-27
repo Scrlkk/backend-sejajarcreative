@@ -161,12 +161,19 @@ router.put(
  * /api/users/{id}:
  *   delete:
  *     tags: [Users]
- *     summary: Hapus user
+ *     summary: Non-aktifkan user (Soft Delete)
+ *     description: |
+ *       Menonaktifkan user tanpa menghapus dari database.
+ *       - Data user tetap tersimpan untuk audit trail
+ *       - User tidak bisa login setelah di-deactivate
+ *       - Relasi data (projects, tasks, dll) tetap terjaga
+ *       - User yang dinonaktifkan tidak akan muncul di list
+ *       - Gunakan endpoint **POST /api/users/{id}/restore** untuk mengaktifkan kembali
  *     parameters:
  *       - $ref: '#/components/parameters/IdParam'
  *     responses:
  *       200:
- *         description: User berhasil dihapus
+ *         description: User berhasil dinonaktifkan
  *         content:
  *           application/json:
  *             schema:
@@ -179,5 +186,38 @@ router.put(
  *         $ref: '#/components/responses/NotFound'
  */
 router.delete("/:id", authorize("superadmin"), controller.remove);
+
+/**
+ * @swagger
+ * /api/users/{id}/restore:
+ *   post:
+ *     tags: [Users]
+ *     summary: Aktifkan kembali user yang dinonaktifkan
+ *     description: |
+ *       Mengaktifkan user yang sebelumnya dinonaktifkan.
+ *       - User akan bisa login kembali
+ *       - Semua data user tetap utuh
+ *     parameters:
+ *       - $ref: '#/components/parameters/IdParam'
+ *     responses:
+ *       200:
+ *         description: User berhasil diaktifkan
+ *         content:
+ *           application/json:
+ *             schema:
+ *               allOf:
+ *                 - $ref: '#/components/schemas/SuccessResponse'
+ *                 - type: object
+ *                   properties:
+ *                     data:
+ *                       $ref: '#/components/schemas/UserProfile'
+ *       401:
+ *         $ref: '#/components/responses/Unauthorized'
+ *       403:
+ *         $ref: '#/components/responses/Forbidden'
+ *       404:
+ *         $ref: '#/components/responses/NotFound'
+ */
+router.post("/:id/restore", authorize("superadmin"), controller.restore);
 
 export default router;

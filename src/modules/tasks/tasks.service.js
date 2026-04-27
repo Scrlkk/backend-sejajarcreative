@@ -55,6 +55,16 @@ export const create = async ({
   if (start_date && due_date && new Date(start_date) > new Date(due_date))
     throw new AppError("start_date tidak boleh melebihi due_date", 422);
 
+  // Validasi jika assigned_to ada, user harus aktif
+  if (assigned_to) {
+    const { rows: userRows } = await pool.query(
+      "SELECT id FROM core.users WHERE id = $1 AND is_active = true",
+      [assigned_to],
+    );
+    if (!userRows[0])
+      throw new AppError("Assigned user not found or inactive", 404);
+  }
+
   const { rows } = await pool.query(
     `INSERT INTO core.tasks (project_id, title, description, assigned_to, start_date, due_date)
      VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
@@ -70,6 +80,16 @@ export const update = async (id, fields) => {
     new Date(fields.start_date) > new Date(fields.due_date)
   )
     throw new AppError("start_date tidak boleh melebihi due_date", 422);
+
+  // Validasi jika assigned_to ada, user harus aktif
+  if (fields.assigned_to) {
+    const { rows: userRows } = await pool.query(
+      "SELECT id FROM core.users WHERE id = $1 AND is_active = true",
+      [fields.assigned_to],
+    );
+    if (!userRows[0])
+      throw new AppError("Assigned user not found or inactive", 404);
+  }
 
   const keys = Object.keys(fields);
   const values = Object.values(fields);

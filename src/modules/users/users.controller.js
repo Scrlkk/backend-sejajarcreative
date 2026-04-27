@@ -41,3 +41,15 @@ export const remove = async (req, res, next) => {
     next(e);
   }
 };
+
+export const restore = async (req, res, next) => {
+  try {
+    success(
+      res,
+      await service.restore(+req.params.id),
+      "User berhasil diaktifkan",
+    );
+  } catch (e) {
+    next(e);
+  }
+};

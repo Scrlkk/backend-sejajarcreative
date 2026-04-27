@@ -72,13 +72,21 @@ export const getMembers = async (projectId) => {
     `SELECT pm.*, u.full_name, u.email, u.role
      FROM core.project_members pm
      JOIN core.users u ON u.id = pm.user_id
-     WHERE pm.project_id = $1`,
+     WHERE pm.project_id = $1 AND u.is_active = true
+     ORDER BY u.full_name ASC`,
     [projectId],
   );
   return rows;
 };
 
 export const addMember = async (projectId, { user_id, role_in_project }) => {
+  // Validasi user masih aktif
+  const { rows: userRows } = await pool.query(
+    "SELECT id FROM core.users WHERE id = $1 AND is_active = true",
+    [user_id],
+  );
+  if (!userRows[0]) throw new AppError("User not found or inactive", 404);
+
   const { rows } = await pool.query(
     "INSERT INTO core.project_members (project_id, user_id, role_in_project) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING RETURNING *",
     [projectId, user_id, role_in_project],

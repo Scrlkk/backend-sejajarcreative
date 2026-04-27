@@ -6,7 +6,7 @@ import { paginate } from "../../utils/pagination.js";
 export const getAll = async (query) => {
   const { limit, offset } = paginate(query);
   const { rows } = await pool.query(
-    "SELECT id, full_name, email, role, created_at FROM core.users ORDER BY id LIMIT $1 OFFSET $2",
+    "SELECT id, full_name, email, role, created_at FROM core.users WHERE is_active = true ORDER BY id LIMIT $1 OFFSET $2",
     [limit, offset],
   );
   return rows;
@@ -14,7 +14,7 @@ export const getAll = async (query) => {
 
 export const getById = async (id) => {
   const { rows } = await pool.query(
-    "SELECT id, full_name, email, role, created_at FROM core.users WHERE id = $1",
+    "SELECT id, full_name, email, role, created_at FROM core.users WHERE id = $1 AND is_active = true",
     [id],
   );
   if (!rows[0]) throw new AppError("User not found", 404);
@@ -44,9 +44,18 @@ export const update = async (id, fields) => {
 };
 
 export const remove = async (id) => {
-  const { rowCount } = await pool.query(
-    "DELETE FROM core.users WHERE id = $1",
+  const { rows } = await pool.query(
+    "UPDATE core.users SET is_active = false WHERE id = $1 RETURNING id",
     [id],
   );
-  if (!rowCount) throw new AppError("User not found", 404);
+  if (!rows[0]) throw new AppError("User not found", 404);
+};
+
+export const restore = async (id) => {
+  const { rows } = await pool.query(
+    "UPDATE core.users SET is_active = true WHERE id = $1 RETURNING id, full_name, email, role",
+    [id],
+  );
+  if (!rows[0]) throw new AppError("User not found", 404);
+  return rows[0];
 };

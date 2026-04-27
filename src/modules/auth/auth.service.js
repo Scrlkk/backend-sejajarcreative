@@ -5,12 +5,14 @@ import AppError from "../../utils/AppError.js";
 
 export const login = async (email, password) => {
   const { rows } = await pool.query(
-    "SELECT id, full_name, email, password, role FROM core.users WHERE email = $1",
+    "SELECT id, full_name, email, password, role, is_active FROM core.users WHERE email = $1",
     [email],
   );
   const user = rows[0];
   if (!user || !(await compare(password, user.password)))
     throw new AppError("Invalid credentials", 401);
+
+  if (!user.is_active) throw new AppError("User account is inactive", 403);
 
   const payload = { id: user.id, email: user.email, role: user.role };
   const accessToken = signAccess(payload);
@@ -44,13 +46,15 @@ export const refresh = async (token) => {
   }
 
   const { rows } = await pool.query(
-    `SELECT rt.*, u.id AS user_id, u.email, u.role
+    `SELECT rt.*, u.id AS user_id, u.email, u.role, u.is_active
      FROM auth.refresh_tokens rt
      JOIN core.users u ON u.id = rt.user_id
      WHERE rt.token = $1 AND rt.expires_at > now()`,
     [token],
   );
   if (!rows[0]) throw new AppError("Refresh token not found", 401);
+
+  if (!rows[0].is_active) throw new AppError("User account is inactive", 403);
 
   await pool.query("DELETE FROM auth.refresh_tokens WHERE token = $1", [token]);
 
