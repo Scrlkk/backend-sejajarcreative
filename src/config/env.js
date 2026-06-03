@@ -8,6 +8,7 @@ const required = [
   "DB_PASSWORD",
   "JWT_SECRET",
   "JWT_REFRESH_SECRET",
+  "CORS_ORIGIN",
 ];
 
 required.forEach((key) => {
@@ -15,6 +16,13 @@ required.forEach((key) => {
     throw new Error(`Missing required environment variable: ${key}`);
   }
 });
+
+// Validate CORS_ORIGIN is not "*"
+if (process.env.CORS_ORIGIN === "*") {
+  throw new Error(
+    "CORS_ORIGIN cannot be '*' for security reasons. Please specify allowed origins.",
+  );
+}
 
 const env = {
   nodeEnv: process.env.NODE_ENV || "development",
@@ -32,11 +40,14 @@ const env = {
     refreshSecret: process.env.JWT_REFRESH_SECRET,
     refreshExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN || "7d",
   },
-  bcryptRounds: parseInt(process.env.BCRYPT_ROUNDS, 10) || 10,
-  cron: {
-    contentSchedule: process.env.CRON_CONTENT_SCHEDULE || "*/5 * * * *",
-    timezone: process.env.CRON_TIMEZONE || "Asia/Jakarta",
+  // Enforce minimum bcrypt rounds (minimum 12)
+  bcryptRounds: Math.max(parseInt(process.env.BCRYPT_ROUNDS, 10) || 12, 12),
+  cors: {
+    origins: process.env.CORS_ORIGIN.split(",")
+      .map((o) => o.trim())
+      .filter(Boolean),
   },
+  logLevel: process.env.LOG_LEVEL || "info",
 };
 
 export default env;

@@ -1,5 +1,6 @@
 import pg from "pg";
 import env from "./env.js";
+import logger from "./logger.js";
 
 const { Pool } = pg;
 
@@ -15,12 +16,45 @@ const pool = new Pool({
 });
 
 pool.on("connect", () => {
-  console.log("[DB] Connected to PostgreSQL");
+  logger.info("[DB] Client connected to PostgreSQL");
 });
 
 pool.on("error", (err) => {
-  console.error("[DB] Unexpected error on idle client:", err);
-  process.exit(-1);
+  logger.error("[DB] Unexpected error on idle client", {
+    error: err.message,
+    code: err.code,
+  });
 });
+
+// Handle drain
+pool.on("drain", () => {
+  logger.warn("[DB] All clients in the pool are idle");
+});
+
+/**
+ * Check database connectivity
+ * @returns {Promise<boolean>}
+ */
+export const checkDBHealth = async () => {
+  try {
+    await pool.query("SELECT NOW()");
+    return true;
+  } catch (err) {
+    logger.error("Database health check failed", { error: err.message });
+    return false;
+  }
+};
+
+/**
+ * Graceful shutdown
+ */
+export const closePool = async () => {
+  try {
+    await pool.end();
+    logger.info("Database pool closed gracefully");
+  } catch (err) {
+    logger.error("Error closing database pool", { error: err.message });
+  }
+};
 
 export default pool;
