@@ -68,7 +68,28 @@ web_modules/
 # dotenv environment variable files
 .env
 .env.*
+.env.local
+.env.*.local
 !.env.example
+
+# Security & Secrets
+*.pem
+*.key
+*.cert
+*.crt
+secrets/
+.aws/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Logs (additional)
+logs/
+*.log
 
 # parcel-bundler cache (https://parceljs.org/)
 .cache

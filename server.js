@@ -1,7 +1,7 @@
 import "dotenv/config";
 import app from "./src/app.js";
 import env from "./src/config/env.js";
-import { startAllJobs } from "./src/jobs/index.js";
+import { closePool } from "./src/config/database.js";
 
 const server = app.listen(env.port, () => {
   console.log("");
@@ -12,19 +12,30 @@ const server = app.listen(env.port, () => {
     `     Database    : ${env.db.name} @ ${env.db.host}:${env.db.port}`,
   );
   console.log("");
-
-  startAllJobs();
 });
 
-process.on("SIGTERM", () => {
-  console.log("[Server] SIGTERM diterima. Menutup server...");
-  server.close(() => {
-    console.log("[Server] Server ditutup.");
+const gracefulShutdown = async (signal) => {
+  console.log(`[Server] ${signal} diterima. Menutup server...`);
+  server.close(async () => {
+    console.log("[Server] Server HTTP ditutup.");
+    await closePool();
+    console.log("[Server] Database pool ditutup. Keluar.");
     process.exit(0);
   });
+};
+
+process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
+process.on("SIGINT", () => gracefulShutdown("SIGINT"));
+
+// Tangkap promise rejection yang tidak ditangkap
+process.on("unhandledRejection", (reason, promise) => {
+  console.error("[Server] Unhandled Rejection at:", promise, "reason:", reason);
 });
 
-process.on("SIGINT", () => {
-  console.log("[Server] SIGINT diterima. Menutup server...");
-  server.close(() => process.exit(0));
+// Tangkap exception synchronous yang tidak ditangkap
+process.on("uncaughtException", (err) => {
+  console.error("[Server] Uncaught Exception:", err.message, err.stack);
+  // Jangan langsung exit — biarkan graceful shutdown menangani
+  gracefulShutdown("uncaughtException");
 });
+
