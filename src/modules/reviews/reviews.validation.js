@@ -1,9 +1,9 @@
 import { body, param } from "express-validator";
 
 export const createRules = [
-  param("contentId")
+  param("assignmentId")
     .isInt({ min: 1 })
-    .withMessage("contentId di URL tidak valid"),
+    .withMessage("assignmentId di URL tidak valid"),
   body("feedback").notEmpty().withMessage("Feedback wajib diisi"),
   body("status")
     .isIn(["revision", "approved"])

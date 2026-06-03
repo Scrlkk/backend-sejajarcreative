@@ -7,15 +7,14 @@ export const getAll = async (query) => {
   let sql = `
     SELECT
       pi.id, pi.is_featured, pi.display_order, pi.created_at,
-      c.id AS content_id, c.title, c.file_url, c.caption,
+      c.id AS content_id, c.title, c.file_url, c.description,
       c.published_at, c.status,
-      cp.pillar_name,
-      p.project_name
+      co.contract_name, ct.type_name
     FROM public.portfolio_items pi
     JOIN core.contents c ON c.id = pi.content_id
-    LEFT JOIN core.content_pillars cp ON cp.id = c.content_pillar_id
-    LEFT JOIN core.projects p ON p.id = c.project_id
-    WHERE 1=1
+    JOIN core.contracts co ON co.id = c.contract_id
+    JOIN core.content_types ct ON ct.id = c.content_type_id
+    WHERE c.deleted_at IS NULL
   `;
   const params = [];
   let idx = 1;
@@ -34,14 +33,13 @@ export const getById = async (id) => {
   const { rows } = await pool.query(
     `SELECT
        pi.id, pi.is_featured, pi.display_order, pi.created_at,
-       c.id AS content_id, c.title, c.file_url, c.caption,
+       c.id AS content_id, c.title, c.file_url, c.description,
        c.published_at, c.status,
-       cp.pillar_name,
-       p.project_name
+       co.contract_name, ct.type_name
      FROM public.portfolio_items pi
      JOIN core.contents c ON c.id = pi.content_id
-     LEFT JOIN core.content_pillars cp ON cp.id = c.content_pillar_id
-     LEFT JOIN core.projects p ON p.id = c.project_id
+     JOIN core.contracts co ON co.id = c.contract_id
+     JOIN core.content_types ct ON ct.id = c.content_type_id
      WHERE pi.id = $1`,
     [id],
   );
@@ -51,7 +49,7 @@ export const getById = async (id) => {
 
 export const create = async ({ content_id, is_featured, display_order }) => {
   const { rows: contentRows } = await pool.query(
-    "SELECT id, status FROM core.contents WHERE id = $1",
+    "SELECT id, status FROM core.contents WHERE id = $1 AND deleted_at IS NULL",
     [content_id],
   );
   if (!contentRows[0]) throw new AppError("Content not found", 404);
@@ -70,11 +68,14 @@ export const create = async ({ content_id, is_featured, display_order }) => {
 };
 
 export const update = async (id, fields) => {
-  const keys = Object.keys(fields);
-  const values = Object.values(fields);
+  const allowedFields = ["is_featured", "display_order"];
+  const keys = Object.keys(fields).filter((k) => allowedFields.includes(k));
+  if (!keys.length) throw new AppError("Tidak ada field valid untuk diupdate", 422);
+
+  const values = keys.map((k) => fields[k]);
   const set = keys.map((k, i) => `${k} = $${i + 1}`).join(", ");
   const { rows } = await pool.query(
-    `UPDATE public.portfolio_items SET ${set} WHERE id = $${keys.length + 1} RETURNING *`,
+    `UPDATE public.portfolio_items SET ${set}, updated_at = now() WHERE id = $${keys.length + 1} RETURNING *`,
     [...values, id],
   );
   if (!rows[0]) throw new AppError("Portfolio item not found", 404);

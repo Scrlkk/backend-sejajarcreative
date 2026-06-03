@@ -1,4 +1,4 @@
-import * as service from "./contents.service.js";
+import * as service from "./platforms.service.js";
 import { success, created } from "../../utils/response.js";
 
 export const getAll = async (req, res, next) => {
@@ -8,6 +8,7 @@ export const getAll = async (req, res, next) => {
     next(e);
   }
 };
+
 export const getById = async (req, res, next) => {
   try {
     success(res, await service.getById(+req.params.id));
@@ -15,36 +16,31 @@ export const getById = async (req, res, next) => {
     next(e);
   }
 };
+
 export const create = async (req, res, next) => {
   try {
-    created(res, await service.create(req.body), "Konten berhasil dibuat");
-  } catch (e) {
-    next(e);
-  }
-};
-export const update = async (req, res, next) => {
-  try {
-    success(
-      res,
-      await service.update(+req.params.id, req.body),
-      "Konten berhasil diperbarui",
-    );
-  } catch (e) {
-    next(e);
-  }
-};
-export const remove = async (req, res, next) => {
-  try {
-    await service.remove(+req.params.id);
-    success(res, null, "Konten berhasil dihapus");
+    created(res, await service.create(req.body), "Platform dibuat");
   } catch (e) {
     next(e);
   }
 };
 
-export const publish = async (req, res, next) => {
+export const update = async (req, res, next) => {
   try {
-    success(res, await service.publish(+req.params.id), "Konten dipublish");
+    success(
+      res,
+      await service.update(+req.params.id, req.body),
+      "Platform diperbarui",
+    );
+  } catch (e) {
+    next(e);
+  }
+};
+
+export const remove = async (req, res, next) => {
+  try {
+    await service.remove(+req.params.id);
+    success(res, null, "Platform dihapus");
   } catch (e) {
     next(e);
   }

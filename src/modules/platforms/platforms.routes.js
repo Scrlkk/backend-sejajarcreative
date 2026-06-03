@@ -1,31 +1,30 @@
 import { Router } from "express";
-import * as controller from "./clients.controller.js";
-import { createRules, updateRules } from "./clients.validation.js";
+import * as controller from "./platforms.controller.js";
+import { createRules, updateRules } from "./platforms.validation.js";
 import authenticate from "../../middlewares/authenticate.js";
 import authorize from "../../middlewares/authorize.js";
 import validate from "../../middlewares/validate.js";
 
 const router = Router();
-router.use(authenticate);
 
 /**
  * @swagger
- * /api/clients:
+ * /api/platforms:
  *   get:
- *     tags: [Clients]
- *     summary: List semua client aktif
+ *     tags: [Platforms]
+ *     summary: List semua platform
  *     description: |
- *       Mengambil daftar semua client yang masih aktif.
- *       - Hanya menampilkan client dengan `is_active = true` dan belum dihapus
- *       - Client yang dinonaktifkan via soft delete tidak akan muncul
+ *       Mengambil daftar semua platform sosial media yang tersedia di sistem.
+ *       - Endpoint ini **tidak memerlukan autentikasi** (publik)
+ *       - Digunakan saat membuat atau mengedit konten untuk memilih platform tujuan
  *       - Mendukung pagination via parameter `limit` dan `offset`
- *       - Dapat diakses oleh semua user yang sudah login
+ *     security: []
  *     parameters:
  *       - $ref: '#/components/parameters/LimitQuery'
  *       - $ref: '#/components/parameters/OffsetQuery'
  *     responses:
  *       200:
- *         description: Daftar client berhasil diambil
+ *         description: Daftar platform berhasil diambil
  *         content:
  *           application/json:
  *             schema:
@@ -36,26 +35,26 @@ router.use(authenticate);
  *                     data:
  *                       type: array
  *                       items:
- *                         $ref: '#/components/schemas/Client'
- *       401:
- *         $ref: '#/components/responses/Unauthorized'
+ *                         $ref: '#/components/schemas/Platform'
  *   post:
- *     tags: [Clients]
- *     summary: Tambah client baru
+ *     tags: [Platforms]
+ *     summary: Tambah platform baru
  *     description: |
- *       Mendaftarkan client baru ke dalam sistem.
- *       - Hanya **superadmin** dan **owner** yang dapat menambah client
- *       - Field `client_name` wajib diisi, field lainnya opsional
- *       - Client baru langsung aktif (`is_active = true`) setelah dibuat
+ *       Mendaftarkan platform sosial media baru ke dalam sistem.
+ *       - `platform_name` harus unik — tidak boleh duplikat dengan platform yang sudah ada
+ *       - Hanya **superadmin** dan **owner** yang dapat menambah platform baru
+ *       - Platform yang ditambahkan akan tersedia untuk dipilih saat membuat konten
+ *     security:
+ *       - bearerAuth: []
  *     requestBody:
  *       required: true
  *       content:
  *         application/json:
  *           schema:
- *             $ref: '#/components/schemas/CreateClientRequest'
+ *             $ref: '#/components/schemas/CreatePlatformRequest'
  *     responses:
  *       201:
- *         description: Client berhasil ditambahkan
+ *         description: Platform berhasil ditambahkan
  *         content:
  *           application/json:
  *             schema:
@@ -64,7 +63,7 @@ router.use(authenticate);
  *                 - type: object
  *                   properties:
  *                     data:
- *                       $ref: '#/components/schemas/Client'
+ *                       $ref: '#/components/schemas/Platform'
  *       401:
  *         $ref: '#/components/responses/Unauthorized'
  *       403:
@@ -75,6 +74,7 @@ router.use(authenticate);
 router.get("/", controller.getAll);
 router.post(
   "/",
+  authenticate,
   authorize("superadmin", "owner"),
   createRules,
   validate,
@@ -83,19 +83,19 @@ router.post(
 
 /**
  * @swagger
- * /api/clients/{id}:
+ * /api/platforms/{id}:
  *   get:
- *     tags: [Clients]
- *     summary: Detail client
+ *     tags: [Platforms]
+ *     summary: Detail platform
  *     description: |
- *       Mengambil data lengkap satu client berdasarkan ID-nya.
- *       - Hanya client yang masih aktif yang dapat diakses
- *       - Dapat diakses oleh semua user yang sudah login
+ *       Mengambil data satu platform berdasarkan ID-nya.
+ *       - Endpoint ini **tidak memerlukan autentikasi** (publik)
+ *     security: []
  *     parameters:
  *       - $ref: '#/components/parameters/IdParam'
  *     responses:
  *       200:
- *         description: Data client berhasil diambil
+ *         description: Data platform berhasil diambil
  *         content:
  *           application/json:
  *             schema:
@@ -104,19 +104,18 @@ router.post(
  *                 - type: object
  *                   properties:
  *                     data:
- *                       $ref: '#/components/schemas/Client'
- *       401:
- *         $ref: '#/components/responses/Unauthorized'
+ *                       $ref: '#/components/schemas/Platform'
  *       404:
  *         $ref: '#/components/responses/NotFound'
  *   put:
- *     tags: [Clients]
- *     summary: Update data client
+ *     tags: [Platforms]
+ *     summary: Update nama platform
  *     description: |
- *       Memperbarui informasi client yang ada.
- *       - Hanya **superadmin** dan **owner** yang dapat mengubah data client
- *       - Field yang tidak dikirim **tidak akan diubah** (partial update)
- *       - Minimal harus ada 1 field yang diupdate
+ *       Memperbarui nama platform yang ada.
+ *       - `platform_name` yang baru harus tetap unik
+ *       - Hanya **superadmin** dan **owner** yang dapat mengubah platform
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - $ref: '#/components/parameters/IdParam'
  *     requestBody:
@@ -124,10 +123,10 @@ router.post(
  *       content:
  *         application/json:
  *           schema:
- *             $ref: '#/components/schemas/CreateClientRequest'
+ *             $ref: '#/components/schemas/UpdatePlatformRequest'
  *     responses:
  *       200:
- *         description: Client berhasil diperbarui
+ *         description: Platform berhasil diperbarui
  *         content:
  *           application/json:
  *             schema:
@@ -136,7 +135,7 @@ router.post(
  *                 - type: object
  *                   properties:
  *                     data:
- *                       $ref: '#/components/schemas/Client'
+ *                       $ref: '#/components/schemas/Platform'
  *       401:
  *         $ref: '#/components/responses/Unauthorized'
  *       403:
@@ -146,19 +145,20 @@ router.post(
  *       422:
  *         $ref: '#/components/responses/ValidationError'
  *   delete:
- *     tags: [Clients]
- *     summary: Non-aktifkan client (Soft Delete)
+ *     tags: [Platforms]
+ *     summary: Hapus platform (Hard Delete)
  *     description: |
- *       Menonaktifkan client tanpa menghapus datanya dari database.
- *       - Data client tetap tersimpan untuk keperluan audit trail
- *       - Relasi data (contracts, dll) tetap terjaga dan tidak terputus
- *       - Client yang dinonaktifkan tidak akan muncul di list `GET /api/clients`
- *       - Hanya **superadmin** yang dapat menghapus client
+ *       Menghapus platform secara permanen dari database.
+ *       - Platform yang dihapus **tidak dapat dipulihkan**
+ *       - Pastikan platform tidak lagi digunakan oleh konten aktif sebelum dihapus
+ *       - Hanya **superadmin** dan **owner** yang dapat menghapus platform
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - $ref: '#/components/parameters/IdParam'
  *     responses:
  *       200:
- *         description: Client berhasil dinonaktifkan
+ *         description: Platform berhasil dihapus
  *         content:
  *           application/json:
  *             schema:
@@ -173,11 +173,17 @@ router.post(
 router.get("/:id", controller.getById);
 router.put(
   "/:id",
+  authenticate,
   authorize("superadmin", "owner"),
   updateRules,
   validate,
   controller.update,
 );
-router.delete("/:id", authorize("superadmin"), controller.remove);
+router.delete(
+  "/:id",
+  authenticate,
+  authorize("superadmin", "owner"),
+  controller.remove,
+);
 
 export default router;

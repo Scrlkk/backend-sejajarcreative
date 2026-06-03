@@ -3,6 +3,7 @@ import * as controller from "./auth.controller.js";
 import { loginRules, refreshRules } from "./auth.validation.js";
 import authenticate from "../../middlewares/authenticate.js";
 import validate from "../../middlewares/validate.js";
+import { loginLimiter, refreshLimiter } from "../../middlewares/rateLimiter.js";
 
 const router = Router();
 
@@ -12,7 +13,13 @@ const router = Router();
  *   post:
  *     tags: [Auth]
  *     summary: Login user
- *     description: Login menggunakan email dan password. Mengembalikan access token dan refresh token.
+ *     description: |
+ *       Autentikasi user menggunakan email dan password.
+ *       - Mengembalikan **access token** (berlaku singkat) dan **refresh token** (berlaku 7 hari)
+ *       - Access token digunakan sebagai Bearer Token di semua endpoint yang membutuhkan autentikasi
+ *       - User yang tidak aktif (`is_active = false`) tidak dapat login
+ *       - User yang belum memiliki role tidak dapat login
+ *       - Rate limit: **5 percobaan per 15 menit** per IP
  *     security: []
  *     requestBody:
  *       required: true
@@ -41,7 +48,7 @@ const router = Router();
  *       422:
  *         $ref: '#/components/responses/ValidationError'
  */
-router.post("/login", loginRules, validate, controller.login);
+router.post("/login", loginLimiter, loginRules, validate, controller.login);
 
 /**
  * @swagger
@@ -49,7 +56,12 @@ router.post("/login", loginRules, validate, controller.login);
  *   post:
  *     tags: [Auth]
  *     summary: Perbarui access token
- *     description: Gunakan refresh token yang masih valid untuk mendapatkan access token baru.
+ *     description: |
+ *       Gunakan refresh token yang masih valid untuk mendapatkan access token baru.
+ *       - Refresh token lama akan **langsung dihapus** (token rotation)
+ *       - Refresh token baru akan diterbitkan bersamaan dengan access token baru
+ *       - Refresh token yang sudah expired atau tidak ditemukan akan ditolak
+ *       - Rate limit: **10 percobaan per 15 menit** per IP
  *     security: []
  *     requestBody:
  *       required: true
@@ -77,7 +89,13 @@ router.post("/login", loginRules, validate, controller.login);
  *       422:
  *         $ref: '#/components/responses/ValidationError'
  */
-router.post("/refresh", refreshRules, validate, controller.refresh);
+router.post(
+  "/refresh",
+  refreshLimiter,
+  refreshRules,
+  validate,
+  controller.refresh,
+);
 
 /**
  * @swagger
@@ -85,7 +103,11 @@ router.post("/refresh", refreshRules, validate, controller.refresh);
  *   post:
  *     tags: [Auth]
  *     summary: Logout user
- *     description: Menghapus refresh token dari database.
+ *     description: |
+ *       Mengakhiri sesi login dengan menghapus refresh token dari database.
+ *       - Refresh token yang dikirim akan dihapus permanen dari database
+ *       - Access token yang masih aktif tetap valid hingga expired secara alami
+ *       - Untuk keamanan penuh, hapus access token dari sisi client setelah logout
  *     security: []
  *     requestBody:
  *       required: true
@@ -111,7 +133,11 @@ router.post("/logout", refreshRules, validate, controller.logout);
  *   get:
  *     tags: [Auth]
  *     summary: Data user yang sedang login
- *     description: Mengembalikan payload dari access token yang aktif.
+ *     description: |
+ *       Mengembalikan informasi user berdasarkan access token yang aktif.
+ *       - Tidak melakukan query tambahan ke database — data diambil langsung dari payload JWT
+ *       - Berguna untuk memvalidasi status login di sisi client
+ *       - Jika token expired, akan mengembalikan error 401
  *     responses:
  *       200:
  *         description: Data user berhasil diambil

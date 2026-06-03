@@ -1,6 +1,6 @@
 import { Router } from "express";
-import * as controller from "./tasks.controller.js";
-import { createRules, updateRules } from "./tasks.validation.js";
+import * as controller from "./pillars.controller.js";
+import { createRules, updateRules } from "./pillars.validation.js";
 import authenticate from "../../middlewares/authenticate.js";
 import authorize from "../../middlewares/authorize.js";
 import validate from "../../middlewares/validate.js";
@@ -10,40 +10,22 @@ router.use(authenticate);
 
 /**
  * @swagger
- * /api/tasks:
+ * /api/pillars:
  *   get:
- *     tags: [Tasks]
- *     summary: List semua task
+ *     tags: [Pillars]
+ *     summary: List content pillars aktif
  *     description: |
- *       Mengambil daftar task beserta informasi konten, kontrak, dan pillar terkait.
- *       - Dapat difilter berdasarkan `content_id`, `contract_id`, `pillar_id`, dan/atau `status`
- *       - Filter `contract_id` bekerja melalui JOIN ke tabel contents (task tidak langsung punya contract_id)
- *       - Hanya menampilkan task yang belum dihapus (`deleted_at IS NULL`)
- *       - Diurutkan berdasarkan `due_date` terdekat (ASC, null di akhir)
+ *       Mengambil daftar content pillar yang masih aktif di sistem.
+ *       - Hanya menampilkan pillar dengan `is_active = true`
+ *       - Pillar yang dinonaktifkan tidak akan muncul di list ini
  *       - Mendukung pagination via parameter `limit` dan `offset`
+ *       - Dapat diakses oleh semua user yang sudah login
  *     parameters:
  *       - $ref: '#/components/parameters/LimitQuery'
  *       - $ref: '#/components/parameters/OffsetQuery'
- *       - in: query
- *         name: content_id
- *         schema: { type: integer }
- *         description: Filter berdasarkan ID konten
- *       - in: query
- *         name: contract_id
- *         schema: { type: integer }
- *         description: Filter berdasarkan ID kontrak (via relasi konten)
- *       - in: query
- *         name: pillar_id
- *         schema: { type: integer }
- *         description: Filter berdasarkan ID content pillar
- *       - in: query
- *         name: status
- *         schema:
- *           $ref: '#/components/schemas/TaskStatus'
- *         description: Filter berdasarkan status task
  *     responses:
  *       200:
- *         description: Daftar task berhasil diambil
+ *         description: Daftar content pillar berhasil diambil
  *         content:
  *           application/json:
  *             schema:
@@ -54,27 +36,26 @@ router.use(authenticate);
  *                     data:
  *                       type: array
  *                       items:
- *                         $ref: '#/components/schemas/Task'
+ *                         $ref: '#/components/schemas/Pillar'
  *       401:
  *         $ref: '#/components/responses/Unauthorized'
  *   post:
- *     tags: [Tasks]
- *     summary: Buat task baru
+ *     tags: [Pillars]
+ *     summary: Buat content pillar baru
  *     description: |
- *       Membuat task baru yang dikaitkan ke konten dan content pillar tertentu.
- *       - `content_id` dan `pillar_id` harus merujuk ke data yang valid
- *       - Status awal task adalah **pending**
- *       - `start_date` tidak boleh lebih besar dari `due_date`
+ *       Membuat content pillar baru untuk mengelompokkan jenis konten secara tematik.
+ *       - `pillar_name` harus unik — tidak boleh duplikat dengan pillar yang sudah ada
+ *       - Pillar baru langsung aktif (`is_active = true`) setelah dibuat
  *       - Tersedia untuk: **superadmin**, **owner**, **content_lead**
  *     requestBody:
  *       required: true
  *       content:
  *         application/json:
  *           schema:
- *             $ref: '#/components/schemas/CreateTaskRequest'
+ *             $ref: '#/components/schemas/CreatePillarRequest'
  *     responses:
  *       201:
- *         description: Task berhasil dibuat
+ *         description: Pillar berhasil dibuat
  *         content:
  *           application/json:
  *             schema:
@@ -83,7 +64,7 @@ router.use(authenticate);
  *                 - type: object
  *                   properties:
  *                     data:
- *                       $ref: '#/components/schemas/Task'
+ *                       $ref: '#/components/schemas/Pillar'
  *       401:
  *         $ref: '#/components/responses/Unauthorized'
  *       403:
@@ -102,19 +83,18 @@ router.post(
 
 /**
  * @swagger
- * /api/tasks/{id}:
+ * /api/pillars/{id}:
  *   get:
- *     tags: [Tasks]
- *     summary: Detail task
+ *     tags: [Pillars]
+ *     summary: Detail content pillar
  *     description: |
- *       Mengambil data lengkap satu task beserta informasi konten, pillar, dan kontrak terkait.
- *       - Response menyertakan `content_title`, `pillar_name`, `contract_name`
- *       - Hanya task yang belum dihapus yang dapat diakses
+ *       Mengambil data lengkap satu content pillar berdasarkan ID-nya.
+ *       - Hanya pillar yang masih aktif (`is_active = true`) yang dapat diakses
  *     parameters:
  *       - $ref: '#/components/parameters/IdParam'
  *     responses:
  *       200:
- *         description: Data task berhasil diambil
+ *         description: Data pillar berhasil diambil
  *         content:
  *           application/json:
  *             schema:
@@ -123,20 +103,18 @@ router.post(
  *                 - type: object
  *                   properties:
  *                     data:
- *                       $ref: '#/components/schemas/Task'
+ *                       $ref: '#/components/schemas/Pillar'
  *       401:
  *         $ref: '#/components/responses/Unauthorized'
  *       404:
  *         $ref: '#/components/responses/NotFound'
  *   put:
- *     tags: [Tasks]
- *     summary: Update task / ubah status
+ *     tags: [Pillars]
+ *     summary: Update content pillar
  *     description: |
- *       Memperbarui data task atau mengubah statusnya.
+ *       Memperbarui data content pillar yang ada.
  *       - Field yang tidak dikirim **tidak akan diubah** (partial update)
- *       - Alur status task: `pending → in_progress → review → done`
- *       - Status `done` diset otomatis oleh sistem ketika review task disetujui (**approved**)
- *       - `start_date` tidak boleh lebih besar dari `due_date`
+ *       - `pillar_name` jika diubah harus tetap unik
  *       - Tersedia untuk: **superadmin**, **owner**, **content_lead**
  *     parameters:
  *       - $ref: '#/components/parameters/IdParam'
@@ -145,10 +123,10 @@ router.post(
  *       content:
  *         application/json:
  *           schema:
- *             $ref: '#/components/schemas/UpdateTaskRequest'
+ *             $ref: '#/components/schemas/UpdatePillarRequest'
  *     responses:
  *       200:
- *         description: Task berhasil diperbarui
+ *         description: Pillar berhasil diperbarui
  *         content:
  *           application/json:
  *             schema:
@@ -157,7 +135,7 @@ router.post(
  *                 - type: object
  *                   properties:
  *                     data:
- *                       $ref: '#/components/schemas/Task'
+ *                       $ref: '#/components/schemas/Pillar'
  *       401:
  *         $ref: '#/components/responses/Unauthorized'
  *       403:
@@ -167,19 +145,19 @@ router.post(
  *       422:
  *         $ref: '#/components/responses/ValidationError'
  *   delete:
- *     tags: [Tasks]
- *     summary: Hapus task (Soft Delete)
+ *     tags: [Pillars]
+ *     summary: Non-aktifkan content pillar (Soft Delete)
  *     description: |
- *       Menonaktifkan task tanpa menghapus datanya dari database.
- *       - Data task tetap tersimpan untuk keperluan audit trail
- *       - Relasi data (task_assignments, reviews) tetap terjaga dan tidak terputus
- *       - Task yang dihapus tidak akan muncul di list `GET /api/tasks`
+ *       Menonaktifkan content pillar tanpa menghapus datanya dari database.
+ *       - Data pillar tetap tersimpan untuk keperluan audit trail
+ *       - Relasi data (tasks) yang menggunakan pillar ini tetap terjaga
+ *       - Pillar yang dinonaktifkan tidak akan muncul di list `GET /api/pillars`
  *       - Tersedia untuk: **superadmin**, **owner**, **content_lead**
  *     parameters:
  *       - $ref: '#/components/parameters/IdParam'
  *     responses:
  *       200:
- *         description: Task berhasil dihapus
+ *         description: Pillar berhasil dinonaktifkan
  *         content:
  *           application/json:
  *             schema:

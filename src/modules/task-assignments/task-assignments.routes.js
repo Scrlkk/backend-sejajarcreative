@@ -1,6 +1,6 @@
 import { Router } from "express";
-import * as controller from "./tasks.controller.js";
-import { createRules, updateRules } from "./tasks.validation.js";
+import * as controller from "./task-assignments.controller.js";
+import { createRules, updateRules } from "./task-assignments.validation.js";
 import authenticate from "../../middlewares/authenticate.js";
 import authorize from "../../middlewares/authorize.js";
 import validate from "../../middlewares/validate.js";
@@ -10,40 +10,35 @@ router.use(authenticate);
 
 /**
  * @swagger
- * /api/tasks:
+ * /api/task-assignments:
  *   get:
- *     tags: [Tasks]
- *     summary: List semua task
+ *     tags: [Task Assignments]
+ *     summary: List penugasan task
  *     description: |
- *       Mengambil daftar task beserta informasi konten, kontrak, dan pillar terkait.
- *       - Dapat difilter berdasarkan `content_id`, `contract_id`, `pillar_id`, dan/atau `status`
- *       - Filter `contract_id` bekerja melalui JOIN ke tabel contents (task tidak langsung punya contract_id)
- *       - Hanya menampilkan task yang belum dihapus (`deleted_at IS NULL`)
- *       - Diurutkan berdasarkan `due_date` terdekat (ASC, null di akhir)
+ *       Mengambil daftar penugasan task beserta informasi user yang ditugaskan.
+ *       - Dapat difilter berdasarkan `task_id`, `assigned_to`, dan/atau `status`
+ *       - Hanya menampilkan penugasan yang belum dihapus (`deleted_at IS NULL`)
+ *       - Response menyertakan `assignee_name` dan `task_title` dari relasi JOIN
  *       - Mendukung pagination via parameter `limit` dan `offset`
  *     parameters:
  *       - $ref: '#/components/parameters/LimitQuery'
  *       - $ref: '#/components/parameters/OffsetQuery'
  *       - in: query
- *         name: content_id
+ *         name: task_id
  *         schema: { type: integer }
- *         description: Filter berdasarkan ID konten
+ *         description: Filter berdasarkan ID task
  *       - in: query
- *         name: contract_id
+ *         name: assigned_to
  *         schema: { type: integer }
- *         description: Filter berdasarkan ID kontrak (via relasi konten)
- *       - in: query
- *         name: pillar_id
- *         schema: { type: integer }
- *         description: Filter berdasarkan ID content pillar
+ *         description: Filter berdasarkan ID user yang ditugaskan
  *       - in: query
  *         name: status
  *         schema:
  *           $ref: '#/components/schemas/TaskStatus'
- *         description: Filter berdasarkan status task
+ *         description: Filter berdasarkan status penugasan
  *     responses:
  *       200:
- *         description: Daftar task berhasil diambil
+ *         description: Daftar penugasan task berhasil diambil
  *         content:
  *           application/json:
  *             schema:
@@ -54,27 +49,28 @@ router.use(authenticate);
  *                     data:
  *                       type: array
  *                       items:
- *                         $ref: '#/components/schemas/Task'
+ *                         $ref: '#/components/schemas/TaskAssignment'
  *       401:
  *         $ref: '#/components/responses/Unauthorized'
  *   post:
- *     tags: [Tasks]
- *     summary: Buat task baru
+ *     tags: [Task Assignments]
+ *     summary: Buat penugasan task
  *     description: |
- *       Membuat task baru yang dikaitkan ke konten dan content pillar tertentu.
- *       - `content_id` dan `pillar_id` harus merujuk ke data yang valid
- *       - Status awal task adalah **pending**
- *       - `start_date` tidak boleh lebih besar dari `due_date`
+ *       Menugaskan seorang user untuk mengerjakan sebuah task dengan role tertentu.
+ *       - `assigned_to` harus merujuk ke user yang aktif (`is_active = true`)
+ *       - `assignment_role` menentukan jenis pekerjaan: `scriptwriter`, `content_editor`, atau `social_media_admin`
+ *       - Status awal penugasan adalah **pending**
+ *       - Field `notes_from_admin`, `script_text`, dan `file_url` bersifat opsional
  *       - Tersedia untuk: **superadmin**, **owner**, **content_lead**
  *     requestBody:
  *       required: true
  *       content:
  *         application/json:
  *           schema:
- *             $ref: '#/components/schemas/CreateTaskRequest'
+ *             $ref: '#/components/schemas/CreateTaskAssignmentRequest'
  *     responses:
  *       201:
- *         description: Task berhasil dibuat
+ *         description: Penugasan berhasil dibuat
  *         content:
  *           application/json:
  *             schema:
@@ -83,7 +79,7 @@ router.use(authenticate);
  *                 - type: object
  *                   properties:
  *                     data:
- *                       $ref: '#/components/schemas/Task'
+ *                       $ref: '#/components/schemas/TaskAssignment'
  *       401:
  *         $ref: '#/components/responses/Unauthorized'
  *       403:
@@ -102,19 +98,19 @@ router.post(
 
 /**
  * @swagger
- * /api/tasks/{id}:
+ * /api/task-assignments/{id}:
  *   get:
- *     tags: [Tasks]
- *     summary: Detail task
+ *     tags: [Task Assignments]
+ *     summary: Detail penugasan task
  *     description: |
- *       Mengambil data lengkap satu task beserta informasi konten, pillar, dan kontrak terkait.
- *       - Response menyertakan `content_title`, `pillar_name`, `contract_name`
- *       - Hanya task yang belum dihapus yang dapat diakses
+ *       Mengambil data lengkap satu penugasan task beserta informasi user dan task terkait.
+ *       - Response menyertakan `assignee_name`, `task_title`, dan `content_id`
+ *       - Hanya penugasan yang belum dihapus yang dapat diakses
  *     parameters:
  *       - $ref: '#/components/parameters/IdParam'
  *     responses:
  *       200:
- *         description: Data task berhasil diambil
+ *         description: Data penugasan task berhasil diambil
  *         content:
  *           application/json:
  *             schema:
@@ -123,21 +119,21 @@ router.post(
  *                 - type: object
  *                   properties:
  *                     data:
- *                       $ref: '#/components/schemas/Task'
+ *                       $ref: '#/components/schemas/TaskAssignment'
  *       401:
  *         $ref: '#/components/responses/Unauthorized'
  *       404:
  *         $ref: '#/components/responses/NotFound'
  *   put:
- *     tags: [Tasks]
- *     summary: Update task / ubah status
+ *     tags: [Task Assignments]
+ *     summary: Update penugasan task / ubah status
  *     description: |
- *       Memperbarui data task atau mengubah statusnya.
+ *       Memperbarui data penugasan task atau mengubah statusnya.
  *       - Field yang tidak dikirim **tidak akan diubah** (partial update)
- *       - Alur status task: `pending → in_progress → review → done`
- *       - Status `done` diset otomatis oleh sistem ketika review task disetujui (**approved**)
- *       - `start_date` tidak boleh lebih besar dari `due_date`
- *       - Tersedia untuk: **superadmin**, **owner**, **content_lead**
+ *       - Alur status penugasan: `pending → in_progress → review → done`
+ *       - Status `done` diset otomatis oleh sistem ketika review disetujui (**approved**)
+ *       - Ketika status berubah ke `review` atau `done`, field `submitted_at` akan diisi otomatis
+ *       - Tersedia untuk: **superadmin**, **owner**, **content_lead**, **content_editor**, **script_writer**, **admin_social_media**
  *     parameters:
  *       - $ref: '#/components/parameters/IdParam'
  *     requestBody:
@@ -145,10 +141,10 @@ router.post(
  *       content:
  *         application/json:
  *           schema:
- *             $ref: '#/components/schemas/UpdateTaskRequest'
+ *             $ref: '#/components/schemas/UpdateTaskAssignmentRequest'
  *     responses:
  *       200:
- *         description: Task berhasil diperbarui
+ *         description: Penugasan task berhasil diperbarui
  *         content:
  *           application/json:
  *             schema:
@@ -157,7 +153,7 @@ router.post(
  *                 - type: object
  *                   properties:
  *                     data:
- *                       $ref: '#/components/schemas/Task'
+ *                       $ref: '#/components/schemas/TaskAssignment'
  *       401:
  *         $ref: '#/components/responses/Unauthorized'
  *       403:
@@ -167,19 +163,19 @@ router.post(
  *       422:
  *         $ref: '#/components/responses/ValidationError'
  *   delete:
- *     tags: [Tasks]
- *     summary: Hapus task (Soft Delete)
+ *     tags: [Task Assignments]
+ *     summary: Hapus penugasan task (Soft Delete)
  *     description: |
- *       Menonaktifkan task tanpa menghapus datanya dari database.
- *       - Data task tetap tersimpan untuk keperluan audit trail
- *       - Relasi data (task_assignments, reviews) tetap terjaga dan tidak terputus
- *       - Task yang dihapus tidak akan muncul di list `GET /api/tasks`
+ *       Menonaktifkan penugasan task tanpa menghapus datanya dari database.
+ *       - Data penugasan tetap tersimpan untuk keperluan audit trail
+ *       - Relasi data (reviews) tetap terjaga dan tidak terputus
+ *       - Penugasan yang dihapus tidak akan muncul di list `GET /api/task-assignments`
  *       - Tersedia untuk: **superadmin**, **owner**, **content_lead**
  *     parameters:
  *       - $ref: '#/components/parameters/IdParam'
  *     responses:
  *       200:
- *         description: Task berhasil dihapus
+ *         description: Penugasan task berhasil dihapus
  *         content:
  *           application/json:
  *             schema:
@@ -194,7 +190,7 @@ router.post(
 router.get("/:id", controller.getById);
 router.put(
   "/:id",
-  authorize("superadmin", "owner", "content_lead"),
+  authorize("superadmin", "owner", "content_lead", "content_editor", "script_writer", "admin_social_media"),
   updateRules,
   validate,
   controller.update,

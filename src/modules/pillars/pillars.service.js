@@ -1,0 +1,56 @@
+import pool from "../../config/database.js";
+import AppError from "../../utils/AppError.js";
+import { paginate } from "../../utils/pagination.js";
+
+export const getAll = async (query) => {
+  const { limit, offset } = paginate(query);
+  let sql = "SELECT * FROM core.pillars WHERE is_active = true";
+  const params = [];
+  if (query.include_inactive === "true") {
+    sql = "SELECT * FROM core.pillars WHERE 1=1";
+  }
+  sql += ` ORDER BY id DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
+  params.push(limit, offset);
+  const { rows } = await pool.query(sql, params);
+  return rows;
+};
+
+export const getById = async (id) => {
+  const { rows } = await pool.query(
+    "SELECT * FROM core.pillars WHERE id = $1 AND is_active = true",
+    [id],
+  );
+  if (!rows[0]) throw new AppError("Pillar tidak ditemukan", 404);
+  return rows[0];
+};
+
+export const create = async ({ pillar_name, description }) => {
+  const { rows } = await pool.query(
+    "INSERT INTO core.pillars (pillar_name, description) VALUES ($1, $2) RETURNING *",
+    [pillar_name, description],
+  );
+  return rows[0];
+};
+
+export const update = async (id, fields) => {
+  const allowedFields = ["pillar_name", "description", "is_active"];
+  const keys = Object.keys(fields).filter((k) => allowedFields.includes(k));
+  if (!keys.length) throw new AppError("Tidak ada field valid untuk diupdate", 422);
+
+  const values = keys.map((k) => fields[k]);
+  const set = keys.map((k, i) => `${k} = $${i + 1}`).join(", ");
+  const { rows } = await pool.query(
+    `UPDATE core.pillars SET ${set}, updated_at = now() WHERE id = $${keys.length + 1} RETURNING *`,
+    [...values, id],
+  );
+  if (!rows[0]) throw new AppError("Pillar tidak ditemukan", 404);
+  return rows[0];
+};
+
+export const remove = async (id) => {
+  const { rowCount } = await pool.query(
+    "UPDATE core.pillars SET is_active = false, updated_at = now() WHERE id = $1 AND is_active = true",
+    [id],
+  );
+  if (!rowCount) throw new AppError("Pillar tidak ditemukan", 404);
+};

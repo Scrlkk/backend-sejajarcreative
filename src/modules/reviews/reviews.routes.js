@@ -10,16 +10,22 @@ router.use(authenticate);
 
 /**
  * @swagger
- * /api/reviews/content/{contentId}:
+ * /api/reviews/task-assignment/{assignmentId}:
  *   get:
  *     tags: [Reviews]
- *     summary: List semua review untuk konten tertentu
+ *     summary: List review untuk task assignment
+ *     description: |
+ *       Mengambil semua riwayat review yang pernah diberikan untuk sebuah task assignment.
+ *       - Diurutkan dari review terbaru (berdasarkan `reviewed_at`, null di akhir)
+ *       - Satu task assignment dapat memiliki lebih dari satu review (riwayat revisi)
+ *       - Response menyertakan `reviewer_name` dari relasi JOIN ke tabel users
+ *       - Mendukung pagination via parameter `limit` dan `offset`
  *     parameters:
  *       - in: path
- *         name: contentId
+ *         name: assignmentId
  *         required: true
  *         schema: { type: integer }
- *         description: ID konten yang akan dilihat reviewnya
+ *         description: ID task assignment
  *       - $ref: '#/components/parameters/LimitQuery'
  *       - $ref: '#/components/parameters/OffsetQuery'
  *     responses:
@@ -38,19 +44,31 @@ router.use(authenticate);
  *                         $ref: '#/components/schemas/Review'
  *       401:
  *         $ref: '#/components/responses/Unauthorized'
+ *       404:
+ *         description: Task assignment tidak ditemukan
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  *   post:
  *     tags: [Reviews]
- *     summary: Submit review untuk konten
+ *     summary: Submit review untuk task assignment
  *     description: |
- *       Setelah review disubmit, status konten akan otomatis diperbarui:
- *       - `approved` → status konten menjadi `approved`
- *       - `revision` → status konten kembali ke `draft`
+ *       Memberikan review terhadap hasil kerja dari sebuah task assignment.
+ *       - Reviewer adalah user yang sedang login (`reviewer_id` diisi otomatis dari token)
+ *       - Jika review berstatus **approved**:
+ *         - Status task assignment berubah menjadi `done`
+ *         - Status task induk berubah menjadi `done`
+ *       - Jika review berstatus **revision**:
+ *         - Status task assignment kembali menjadi `in_progress`
+ *         - Worker perlu mengirimkan ulang hasil kerja sebelum dapat di-review kembali
+ *       - Tersedia untuk: **superadmin**, **owner**, **content_lead**
  *     parameters:
  *       - in: path
- *         name: contentId
+ *         name: assignmentId
  *         required: true
  *         schema: { type: integer }
- *         description: ID konten yang akan di-review
+ *         description: ID task assignment yang akan di-review
  *     requestBody:
  *       required: true
  *       content:
@@ -74,13 +92,17 @@ router.use(authenticate);
  *       403:
  *         $ref: '#/components/responses/Forbidden'
  *       404:
- *         $ref: '#/components/responses/NotFound'
+ *         description: Task assignment tidak ditemukan
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  *       422:
  *         $ref: '#/components/responses/ValidationError'
  */
-router.get("/content/:contentId", controller.getByContent);
+router.get("/task-assignment/:assignmentId", controller.getByTaskAssignment);
 router.post(
-  "/content/:contentId",
+  "/task-assignment/:assignmentId",
   authorize("superadmin", "owner", "content_lead"),
   createRules,
   validate,

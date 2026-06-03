@@ -1,6 +1,6 @@
 import { Router } from "express";
-import * as controller from "./tasks.controller.js";
-import { createRules, updateRules } from "./tasks.validation.js";
+import * as controller from "./contracts.controller.js";
+import { createRules, updateRules } from "./contracts.validation.js";
 import authenticate from "../../middlewares/authenticate.js";
 import authorize from "../../middlewares/authorize.js";
 import validate from "../../middlewares/validate.js";
@@ -10,40 +10,31 @@ router.use(authenticate);
 
 /**
  * @swagger
- * /api/tasks:
+ * /api/contracts:
  *   get:
- *     tags: [Tasks]
- *     summary: List semua task
+ *     tags: [Contracts]
+ *     summary: List semua kontrak aktif
  *     description: |
- *       Mengambil daftar task beserta informasi konten, kontrak, dan pillar terkait.
- *       - Dapat difilter berdasarkan `content_id`, `contract_id`, `pillar_id`, dan/atau `status`
- *       - Filter `contract_id` bekerja melalui JOIN ke tabel contents (task tidak langsung punya contract_id)
- *       - Hanya menampilkan task yang belum dihapus (`deleted_at IS NULL`)
- *       - Diurutkan berdasarkan `due_date` terdekat (ASC, null di akhir)
+ *       Mengambil daftar semua kontrak yang masih aktif di sistem.
+ *       - Hanya menampilkan kontrak dengan `is_active = true` dan belum dihapus
+ *       - Dapat difilter berdasarkan `client_id` dan/atau `status`
  *       - Mendukung pagination via parameter `limit` dan `offset`
+ *       - Diurutkan dari kontrak terbaru (ID terbesar terlebih dahulu)
  *     parameters:
  *       - $ref: '#/components/parameters/LimitQuery'
  *       - $ref: '#/components/parameters/OffsetQuery'
  *       - in: query
- *         name: content_id
+ *         name: client_id
  *         schema: { type: integer }
- *         description: Filter berdasarkan ID konten
- *       - in: query
- *         name: contract_id
- *         schema: { type: integer }
- *         description: Filter berdasarkan ID kontrak (via relasi konten)
- *       - in: query
- *         name: pillar_id
- *         schema: { type: integer }
- *         description: Filter berdasarkan ID content pillar
+ *         description: Filter berdasarkan ID klien
  *       - in: query
  *         name: status
  *         schema:
- *           $ref: '#/components/schemas/TaskStatus'
- *         description: Filter berdasarkan status task
+ *           $ref: '#/components/schemas/ContractStatus'
+ *         description: Filter berdasarkan status kontrak
  *     responses:
  *       200:
- *         description: Daftar task berhasil diambil
+ *         description: Daftar kontrak berhasil diambil
  *         content:
  *           application/json:
  *             schema:
@@ -54,27 +45,28 @@ router.use(authenticate);
  *                     data:
  *                       type: array
  *                       items:
- *                         $ref: '#/components/schemas/Task'
+ *                         $ref: '#/components/schemas/Contract'
  *       401:
  *         $ref: '#/components/responses/Unauthorized'
  *   post:
- *     tags: [Tasks]
- *     summary: Buat task baru
+ *     tags: [Contracts]
+ *     summary: Buat kontrak baru
  *     description: |
- *       Membuat task baru yang dikaitkan ke konten dan content pillar tertentu.
- *       - `content_id` dan `pillar_id` harus merujuk ke data yang valid
- *       - Status awal task adalah **pending**
- *       - `start_date` tidak boleh lebih besar dari `due_date`
- *       - Tersedia untuk: **superadmin**, **owner**, **content_lead**
+ *       Membuat kontrak baru yang dikaitkan ke client tertentu.
+ *       - Hanya **superadmin** dan **owner** yang dapat membuat kontrak
+ *       - `client_id` harus merujuk ke client yang aktif
+ *       - Status awal kontrak adalah **planning**
+ *       - Field `created_by` diisi otomatis dari token login yang aktif
+ *       - `start_date` tidak boleh lebih besar dari `end_date`
  *     requestBody:
  *       required: true
  *       content:
  *         application/json:
  *           schema:
- *             $ref: '#/components/schemas/CreateTaskRequest'
+ *             $ref: '#/components/schemas/CreateContractRequest'
  *     responses:
  *       201:
- *         description: Task berhasil dibuat
+ *         description: Kontrak berhasil dibuat
  *         content:
  *           application/json:
  *             schema:
@@ -83,7 +75,7 @@ router.use(authenticate);
  *                 - type: object
  *                   properties:
  *                     data:
- *                       $ref: '#/components/schemas/Task'
+ *                       $ref: '#/components/schemas/Contract'
  *       401:
  *         $ref: '#/components/responses/Unauthorized'
  *       403:
@@ -94,7 +86,7 @@ router.use(authenticate);
 router.get("/", controller.getAll);
 router.post(
   "/",
-  authorize("superadmin", "owner", "content_lead"),
+  authorize("superadmin", "owner"),
   createRules,
   validate,
   controller.create,
@@ -102,19 +94,19 @@ router.post(
 
 /**
  * @swagger
- * /api/tasks/{id}:
+ * /api/contracts/{id}:
  *   get:
- *     tags: [Tasks]
- *     summary: Detail task
+ *     tags: [Contracts]
+ *     summary: Detail kontrak
  *     description: |
- *       Mengambil data lengkap satu task beserta informasi konten, pillar, dan kontrak terkait.
- *       - Response menyertakan `content_title`, `pillar_name`, `contract_name`
- *       - Hanya task yang belum dihapus yang dapat diakses
+ *       Mengambil data lengkap satu kontrak beserta informasi client dan pembuat kontrak.
+ *       - Hanya kontrak yang masih aktif yang dapat diakses
+ *       - Response menyertakan `client_name` dan `created_by_name` dari relasi JOIN
  *     parameters:
  *       - $ref: '#/components/parameters/IdParam'
  *     responses:
  *       200:
- *         description: Data task berhasil diambil
+ *         description: Data kontrak berhasil diambil
  *         content:
  *           application/json:
  *             schema:
@@ -123,21 +115,21 @@ router.post(
  *                 - type: object
  *                   properties:
  *                     data:
- *                       $ref: '#/components/schemas/Task'
+ *                       $ref: '#/components/schemas/Contract'
  *       401:
  *         $ref: '#/components/responses/Unauthorized'
  *       404:
  *         $ref: '#/components/responses/NotFound'
  *   put:
- *     tags: [Tasks]
- *     summary: Update task / ubah status
+ *     tags: [Contracts]
+ *     summary: Update kontrak
  *     description: |
- *       Memperbarui data task atau mengubah statusnya.
+ *       Memperbarui data kontrak yang ada.
+ *       - Hanya **superadmin** dan **owner** yang dapat mengubah kontrak
  *       - Field yang tidak dikirim **tidak akan diubah** (partial update)
- *       - Alur status task: `pending → in_progress → review → done`
- *       - Status `done` diset otomatis oleh sistem ketika review task disetujui (**approved**)
- *       - `start_date` tidak boleh lebih besar dari `due_date`
- *       - Tersedia untuk: **superadmin**, **owner**, **content_lead**
+ *       - Field `status` dapat diubah sesuai alur: `planning → ongoing → review → completed`
+ *       - Field `is_active` tidak bisa diubah langsung lewat endpoint ini — gunakan endpoint delete/restore
+ *       - Minimal harus ada 1 field yang diupdate
  *     parameters:
  *       - $ref: '#/components/parameters/IdParam'
  *     requestBody:
@@ -145,10 +137,10 @@ router.post(
  *       content:
  *         application/json:
  *           schema:
- *             $ref: '#/components/schemas/UpdateTaskRequest'
+ *             $ref: '#/components/schemas/UpdateContractRequest'
  *     responses:
  *       200:
- *         description: Task berhasil diperbarui
+ *         description: Kontrak berhasil diperbarui
  *         content:
  *           application/json:
  *             schema:
@@ -157,7 +149,7 @@ router.post(
  *                 - type: object
  *                   properties:
  *                     data:
- *                       $ref: '#/components/schemas/Task'
+ *                       $ref: '#/components/schemas/Contract'
  *       401:
  *         $ref: '#/components/responses/Unauthorized'
  *       403:
@@ -167,19 +159,19 @@ router.post(
  *       422:
  *         $ref: '#/components/responses/ValidationError'
  *   delete:
- *     tags: [Tasks]
- *     summary: Hapus task (Soft Delete)
+ *     tags: [Contracts]
+ *     summary: Non-aktifkan kontrak (Soft Delete)
  *     description: |
- *       Menonaktifkan task tanpa menghapus datanya dari database.
- *       - Data task tetap tersimpan untuk keperluan audit trail
- *       - Relasi data (task_assignments, reviews) tetap terjaga dan tidak terputus
- *       - Task yang dihapus tidak akan muncul di list `GET /api/tasks`
- *       - Tersedia untuk: **superadmin**, **owner**, **content_lead**
+ *       Menonaktifkan kontrak tanpa menghapus datanya dari database.
+ *       - Data kontrak tetap tersimpan untuk keperluan audit trail
+ *       - Relasi data (contents, tasks, dll) tetap terjaga dan tidak terputus
+ *       - Kontrak yang dinonaktifkan tidak akan muncul di list `GET /api/contracts`
+ *       - Hanya **superadmin** dan **owner** yang dapat menonaktifkan kontrak
  *     parameters:
  *       - $ref: '#/components/parameters/IdParam'
  *     responses:
  *       200:
- *         description: Task berhasil dihapus
+ *         description: Kontrak berhasil dinonaktifkan
  *         content:
  *           application/json:
  *             schema:
@@ -194,15 +186,11 @@ router.post(
 router.get("/:id", controller.getById);
 router.put(
   "/:id",
-  authorize("superadmin", "owner", "content_lead"),
+  authorize("superadmin", "owner"),
   updateRules,
   validate,
   controller.update,
 );
-router.delete(
-  "/:id",
-  authorize("superadmin", "owner", "content_lead"),
-  controller.remove,
-);
+router.delete("/:id", authorize("superadmin", "owner"), controller.remove);
 
 export default router;

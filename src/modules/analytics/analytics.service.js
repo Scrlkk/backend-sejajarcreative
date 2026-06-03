@@ -2,17 +2,11 @@ import pool from "../../config/database.js";
 import AppError from "../../utils/AppError.js";
 import { paginate } from "../../utils/pagination.js";
 
-export const record = async ({
-  content_id,
-  likes,
-  comments,
-  views,
-  shares,
-}) => {
+export const record = async ({ content_id, likes, views }) => {
   const { rows } = await pool.query(
-    `INSERT INTO analytics.engagements (content_id, likes, comments, views, shares)
-     VALUES ($1,$2,$3,$4,$5) RETURNING *`,
-    [content_id, likes ?? 0, comments ?? 0, views ?? 0, shares ?? 0],
+    `INSERT INTO analytics.engagements (content_id, likes, views)
+     VALUES ($1,$2,$3) RETURNING *`,
+    [content_id, likes ?? 0, views ?? 0],
   );
   return rows[0];
 };
@@ -33,11 +27,9 @@ export const getSummary = async (contentId) => {
   const { rows } = await pool.query(
     `SELECT
        content_id,
-       SUM(likes)    AS total_likes,
-       SUM(comments) AS total_comments,
-       SUM(views)    AS total_views,
-       SUM(shares)   AS total_shares,
-       COUNT(*)      AS total_records,
+       SUM(likes) AS total_likes,
+       SUM(views) AS total_views,
+       COUNT(*) AS total_records,
        MIN(recorded_at) AS first_recorded,
        MAX(recorded_at) AS last_recorded
      FROM analytics.engagements
@@ -51,30 +43,28 @@ export const getSummary = async (contentId) => {
 };
 
 export const getTopContents = async (query) => {
-  const limit = Math.min(parseInt(query.limit) || 10, 50);
+  const limit = Math.min(parseInt(query.limit, 10) || 10, 50);
   let sql = `
     SELECT
       c.id,
       c.title,
-      c.project_id,
-      p.project_name,
+      c.contract_id,
+      co.contract_name,
       c.status,
-      COALESCE(SUM(e.views),    0) AS total_views,
-      COALESCE(SUM(e.likes),    0) AS total_likes,
-      COALESCE(SUM(e.comments), 0) AS total_comments,
-      COALESCE(SUM(e.shares),   0) AS total_shares
+      COALESCE(SUM(e.views), 0) AS total_views,
+      COALESCE(SUM(e.likes), 0) AS total_likes
     FROM core.contents c
     LEFT JOIN analytics.engagements e ON e.content_id = c.id
-    LEFT JOIN core.projects p ON p.id = c.project_id
-    WHERE 1=1
+    LEFT JOIN core.contracts co ON co.id = c.contract_id
+    WHERE c.deleted_at IS NULL
   `;
   const params = [];
   let idx = 1;
-  if (query.project_id) {
-    sql += ` AND c.project_id = $${idx++}`;
-    params.push(query.project_id);
+  if (query.contract_id) {
+    sql += ` AND c.contract_id = $${idx++}`;
+    params.push(query.contract_id);
   }
-  sql += ` GROUP BY c.id, c.title, c.project_id, p.project_name, c.status
+  sql += ` GROUP BY c.id, c.title, c.contract_id, co.contract_name, c.status
            ORDER BY total_views DESC, total_likes DESC
            LIMIT $${idx}`;
   params.push(limit);

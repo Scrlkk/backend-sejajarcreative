@@ -1,31 +1,31 @@
 import { Router } from "express";
-import * as controller from "./clients.controller.js";
-import { createRules, updateRules } from "./clients.validation.js";
+import * as controller from "./content-types.controller.js";
+import { createRules, updateRules } from "./content-types.validation.js";
 import authenticate from "../../middlewares/authenticate.js";
 import authorize from "../../middlewares/authorize.js";
 import validate from "../../middlewares/validate.js";
 
 const router = Router();
-router.use(authenticate);
 
 /**
  * @swagger
- * /api/clients:
+ * /api/content-types:
  *   get:
- *     tags: [Clients]
- *     summary: List semua client aktif
+ *     tags: [Content Types]
+ *     summary: List semua content type
  *     description: |
- *       Mengambil daftar semua client yang masih aktif.
- *       - Hanya menampilkan client dengan `is_active = true` dan belum dihapus
- *       - Client yang dinonaktifkan via soft delete tidak akan muncul
+ *       Mengambil daftar semua jenis konten yang tersedia di sistem.
+ *       - Endpoint ini **tidak memerlukan autentikasi** (publik)
+ *       - Digunakan saat membuat konten baru untuk memilih jenis kontennya
+ *       - Contoh jenis konten: Reels, Feed Photo, Story, Carousel, Thread, dll
  *       - Mendukung pagination via parameter `limit` dan `offset`
- *       - Dapat diakses oleh semua user yang sudah login
+ *     security: []
  *     parameters:
  *       - $ref: '#/components/parameters/LimitQuery'
  *       - $ref: '#/components/parameters/OffsetQuery'
  *     responses:
  *       200:
- *         description: Daftar client berhasil diambil
+ *         description: Daftar content type berhasil diambil
  *         content:
  *           application/json:
  *             schema:
@@ -36,26 +36,26 @@ router.use(authenticate);
  *                     data:
  *                       type: array
  *                       items:
- *                         $ref: '#/components/schemas/Client'
- *       401:
- *         $ref: '#/components/responses/Unauthorized'
+ *                         $ref: '#/components/schemas/ContentType'
  *   post:
- *     tags: [Clients]
- *     summary: Tambah client baru
+ *     tags: [Content Types]
+ *     summary: Tambah content type baru
  *     description: |
- *       Mendaftarkan client baru ke dalam sistem.
- *       - Hanya **superadmin** dan **owner** yang dapat menambah client
- *       - Field `client_name` wajib diisi, field lainnya opsional
- *       - Client baru langsung aktif (`is_active = true`) setelah dibuat
+ *       Mendaftarkan jenis konten baru ke dalam sistem.
+ *       - `type_name` harus unik — tidak boleh duplikat dengan content type yang sudah ada
+ *       - Hanya **superadmin** dan **owner** yang dapat menambah content type baru
+ *       - Content type yang ditambahkan akan tersedia untuk dipilih saat membuat konten
+ *     security:
+ *       - bearerAuth: []
  *     requestBody:
  *       required: true
  *       content:
  *         application/json:
  *           schema:
- *             $ref: '#/components/schemas/CreateClientRequest'
+ *             $ref: '#/components/schemas/CreateContentTypeRequest'
  *     responses:
  *       201:
- *         description: Client berhasil ditambahkan
+ *         description: Content type berhasil ditambahkan
  *         content:
  *           application/json:
  *             schema:
@@ -64,7 +64,7 @@ router.use(authenticate);
  *                 - type: object
  *                   properties:
  *                     data:
- *                       $ref: '#/components/schemas/Client'
+ *                       $ref: '#/components/schemas/ContentType'
  *       401:
  *         $ref: '#/components/responses/Unauthorized'
  *       403:
@@ -75,6 +75,7 @@ router.use(authenticate);
 router.get("/", controller.getAll);
 router.post(
   "/",
+  authenticate,
   authorize("superadmin", "owner"),
   createRules,
   validate,
@@ -83,19 +84,19 @@ router.post(
 
 /**
  * @swagger
- * /api/clients/{id}:
+ * /api/content-types/{id}:
  *   get:
- *     tags: [Clients]
- *     summary: Detail client
+ *     tags: [Content Types]
+ *     summary: Detail content type
  *     description: |
- *       Mengambil data lengkap satu client berdasarkan ID-nya.
- *       - Hanya client yang masih aktif yang dapat diakses
- *       - Dapat diakses oleh semua user yang sudah login
+ *       Mengambil data satu jenis konten berdasarkan ID-nya.
+ *       - Endpoint ini **tidak memerlukan autentikasi** (publik)
+ *     security: []
  *     parameters:
  *       - $ref: '#/components/parameters/IdParam'
  *     responses:
  *       200:
- *         description: Data client berhasil diambil
+ *         description: Data content type berhasil diambil
  *         content:
  *           application/json:
  *             schema:
@@ -104,19 +105,18 @@ router.post(
  *                 - type: object
  *                   properties:
  *                     data:
- *                       $ref: '#/components/schemas/Client'
- *       401:
- *         $ref: '#/components/responses/Unauthorized'
+ *                       $ref: '#/components/schemas/ContentType'
  *       404:
  *         $ref: '#/components/responses/NotFound'
  *   put:
- *     tags: [Clients]
- *     summary: Update data client
+ *     tags: [Content Types]
+ *     summary: Update nama content type
  *     description: |
- *       Memperbarui informasi client yang ada.
- *       - Hanya **superadmin** dan **owner** yang dapat mengubah data client
- *       - Field yang tidak dikirim **tidak akan diubah** (partial update)
- *       - Minimal harus ada 1 field yang diupdate
+ *       Memperbarui nama jenis konten yang ada.
+ *       - `type_name` yang baru harus tetap unik
+ *       - Hanya **superadmin** dan **owner** yang dapat mengubah content type
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - $ref: '#/components/parameters/IdParam'
  *     requestBody:
@@ -124,10 +124,10 @@ router.post(
  *       content:
  *         application/json:
  *           schema:
- *             $ref: '#/components/schemas/CreateClientRequest'
+ *             $ref: '#/components/schemas/UpdateContentTypeRequest'
  *     responses:
  *       200:
- *         description: Client berhasil diperbarui
+ *         description: Content type berhasil diperbarui
  *         content:
  *           application/json:
  *             schema:
@@ -136,7 +136,7 @@ router.post(
  *                 - type: object
  *                   properties:
  *                     data:
- *                       $ref: '#/components/schemas/Client'
+ *                       $ref: '#/components/schemas/ContentType'
  *       401:
  *         $ref: '#/components/responses/Unauthorized'
  *       403:
@@ -146,19 +146,20 @@ router.post(
  *       422:
  *         $ref: '#/components/responses/ValidationError'
  *   delete:
- *     tags: [Clients]
- *     summary: Non-aktifkan client (Soft Delete)
+ *     tags: [Content Types]
+ *     summary: Hapus content type (Hard Delete)
  *     description: |
- *       Menonaktifkan client tanpa menghapus datanya dari database.
- *       - Data client tetap tersimpan untuk keperluan audit trail
- *       - Relasi data (contracts, dll) tetap terjaga dan tidak terputus
- *       - Client yang dinonaktifkan tidak akan muncul di list `GET /api/clients`
- *       - Hanya **superadmin** yang dapat menghapus client
+ *       Menghapus jenis konten secara permanen dari database.
+ *       - Content type yang dihapus **tidak dapat dipulihkan**
+ *       - Pastikan tidak ada konten aktif yang menggunakan content type ini sebelum dihapus
+ *       - Hanya **superadmin** dan **owner** yang dapat menghapus content type
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - $ref: '#/components/parameters/IdParam'
  *     responses:
  *       200:
- *         description: Client berhasil dinonaktifkan
+ *         description: Content type berhasil dihapus
  *         content:
  *           application/json:
  *             schema:
@@ -173,11 +174,17 @@ router.post(
 router.get("/:id", controller.getById);
 router.put(
   "/:id",
+  authenticate,
   authorize("superadmin", "owner"),
   updateRules,
   validate,
   controller.update,
 );
-router.delete("/:id", authorize("superadmin"), controller.remove);
+router.delete(
+  "/:id",
+  authenticate,
+  authorize("superadmin", "owner"),
+  controller.remove,
+);
 
 export default router;

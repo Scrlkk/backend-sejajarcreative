@@ -5,7 +5,9 @@ import { paginate } from "../../utils/pagination.js";
 export const getAll = async (query) => {
   const { limit, offset } = paginate(query);
   const { rows } = await pool.query(
-    "SELECT * FROM core.clients ORDER BY id DESC LIMIT $1 OFFSET $2",
+    `SELECT * FROM core.clients
+     WHERE is_active = true AND deleted_at IS NULL
+     ORDER BY id DESC LIMIT $1 OFFSET $2`,
     [limit, offset],
   );
   return rows;
@@ -13,7 +15,7 @@ export const getAll = async (query) => {
 
 export const getById = async (id) => {
   const { rows } = await pool.query(
-    "SELECT * FROM core.clients WHERE id = $1",
+    "SELECT * FROM core.clients WHERE id = $1 AND is_active = true AND deleted_at IS NULL",
     [id],
   );
   if (!rows[0]) throw new AppError("Client not found", 404);
@@ -34,11 +36,25 @@ export const create = async ({
 };
 
 export const update = async (id, fields) => {
-  const keys = Object.keys(fields);
-  const values = Object.values(fields);
+  const allowedFields = [
+    "client_name",
+    "company_name",
+    "contact_email",
+    "contact_phone",
+  ];
+  const keys = Object.keys(fields).filter((k) => allowedFields.includes(k));
+
+  if (keys.length === 0) {
+    throw new AppError("Tidak ada field valid untuk diupdate", 422);
+  }
+
+  const values = keys.map((k) => fields[k]);
   const set = keys.map((k, i) => `${k} = $${i + 1}`).join(", ");
+
   const { rows } = await pool.query(
-    `UPDATE core.clients SET ${set} WHERE id = $${keys.length + 1} RETURNING *`,
+    `UPDATE core.clients SET ${set}, updated_at = now()
+     WHERE id = $${keys.length + 1} AND is_active = true AND deleted_at IS NULL
+     RETURNING *`,
     [...values, id],
   );
   if (!rows[0]) throw new AppError("Client not found", 404);
@@ -47,7 +63,9 @@ export const update = async (id, fields) => {
 
 export const remove = async (id) => {
   const { rowCount } = await pool.query(
-    "DELETE FROM core.clients WHERE id = $1",
+    `UPDATE core.clients
+     SET is_active = false, deleted_at = now(), updated_at = now()
+     WHERE id = $1 AND deleted_at IS NULL`,
     [id],
   );
   if (!rowCount) throw new AppError("Client not found", 404);

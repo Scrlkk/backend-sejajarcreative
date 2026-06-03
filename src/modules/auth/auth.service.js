@@ -2,10 +2,20 @@ import pool from "../../config/database.js";
 import { compare } from "../../utils/hash.js";
 import { signAccess, signRefresh, verifyRefresh } from "../../utils/jwt.js";
 import AppError from "../../utils/AppError.js";
+import {
+  fetchRoleNamesByUserId,
+  pickPrimaryRole,
+} from "../../utils/userRoles.js";
+
+const buildTokenPayload = async (userId, email) => {
+  const roles = await fetchRoleNamesByUserId(userId);
+  const role = pickPrimaryRole(roles);
+  return { id: userId, email, role, roles };
+};
 
 export const login = async (email, password) => {
   const { rows } = await pool.query(
-    "SELECT id, full_name, email, password, role, is_active FROM core.users WHERE email = $1",
+    "SELECT id, full_name, email, password, is_active FROM core.users WHERE email = $1 AND deleted_at IS NULL",
     [email],
   );
   const user = rows[0];
@@ -14,7 +24,10 @@ export const login = async (email, password) => {
 
   if (!user.is_active) throw new AppError("User account is inactive", 403);
 
-  const payload = { id: user.id, email: user.email, role: user.role };
+  const roles = await fetchRoleNamesByUserId(user.id);
+  if (!roles.length) throw new AppError("User has no assigned role", 403);
+
+  const payload = await buildTokenPayload(user.id, user.email);
   const accessToken = signAccess(payload);
   const refreshToken = signRefresh(payload);
 
@@ -30,7 +43,8 @@ export const login = async (email, password) => {
       id: user.id,
       full_name: user.full_name,
       email: user.email,
-      role: user.role,
+      role: payload.role,
+      roles: payload.roles,
     },
     accessToken,
     refreshToken,
@@ -46,10 +60,10 @@ export const refresh = async (token) => {
   }
 
   const { rows } = await pool.query(
-    `SELECT rt.*, u.id AS user_id, u.email, u.role, u.is_active
+    `SELECT rt.*, u.id AS user_id, u.email, u.is_active
      FROM auth.refresh_tokens rt
      JOIN core.users u ON u.id = rt.user_id
-     WHERE rt.token = $1 AND rt.expires_at > now()`,
+     WHERE rt.token = $1 AND rt.expires_at > now() AND u.deleted_at IS NULL`,
     [token],
   );
   if (!rows[0]) throw new AppError("Refresh token not found", 401);
@@ -58,7 +72,7 @@ export const refresh = async (token) => {
 
   await pool.query("DELETE FROM auth.refresh_tokens WHERE token = $1", [token]);
 
-  const payload = { id: decoded.id, email: decoded.email, role: decoded.role };
+  const payload = await buildTokenPayload(rows[0].user_id, rows[0].email);
   const accessToken = signAccess(payload);
   const refreshToken = signRefresh(payload);
 
