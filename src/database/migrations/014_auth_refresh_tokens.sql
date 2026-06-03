@@ -5,12 +5,9 @@ CREATE TABLE IF NOT EXISTS auth.refresh_tokens (
   expires_at TIMESTAMP NOT NULL,
   created_at TIMESTAMP DEFAULT now(),
 
-  CONSTRAINT uq_refresh_tokens_token
-    UNIQUE (token),
-
+  CONSTRAINT uq_refresh_tokens_token UNIQUE (token),
   CONSTRAINT fk_refresh_tokens_user
-    FOREIGN KEY (user_id) REFERENCES core.users (id)
-    ON DELETE CASCADE
+    FOREIGN KEY (user_id) REFERENCES core.users (id) ON DELETE CASCADE
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_refresh_tokens_token

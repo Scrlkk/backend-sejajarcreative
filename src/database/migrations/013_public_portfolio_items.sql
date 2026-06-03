@@ -4,13 +4,11 @@ CREATE TABLE IF NOT EXISTS public.portfolio_items (
   is_featured   BOOLEAN DEFAULT false,
   display_order INT,
   created_at    TIMESTAMP DEFAULT now(),
+  updated_at    TIMESTAMP DEFAULT now(),
 
-  CONSTRAINT uq_portfolio_content
-    UNIQUE (content_id),
-
+  CONSTRAINT uq_portfolio_content UNIQUE (content_id),
   CONSTRAINT fk_portfolio_content
-    FOREIGN KEY (content_id) REFERENCES core.contents (id)
-    ON DELETE CASCADE
+    FOREIGN KEY (content_id) REFERENCES core.contents (id) ON DELETE CASCADE
 );
 
 CREATE INDEX IF NOT EXISTS idx_portfolio_featured
