@@ -1,16 +1,42 @@
 import pool from "../../config/database.js";
 import AppError from "../../utils/AppError.js";
 import { paginate } from "../../utils/pagination.js";
+import { pickPrimaryRole } from "../../utils/userRoles.js";
+
+const mapTask = (row) => {
+  if (!row) return row;
+  const roles = Array.isArray(row.assignee_roles)
+    ? row.assignee_roles
+    : typeof row.assignee_roles === "string"
+      ? JSON.parse(row.assignee_roles)
+      : [];
+  return {
+    ...row,
+    assignee_roles: roles,
+    assignee_role: pickPrimaryRole(roles),
+  };
+};
 
 export const getAll = async (query) => {
   const { limit, offset } = paginate(query);
   let sql = `
     SELECT t.*, c.title AS content_title, c.contract_id,
-           u.full_name AS assignee_name, ct.contract_name
+           u.full_name AS assignee_name, ct.contract_name,
+           p.pillar_name, pl.platform_name, cc.type_name AS category_name,
+           COALESCE(
+             (SELECT json_agg(r.role_name ORDER BY r.role_name)
+              FROM core.user_roles ur
+              JOIN core.roles r ON r.id = ur.role_id
+              WHERE ur.user_id = t.assigned_to),
+             '[]'::json
+           ) AS assignee_roles
     FROM core.tasks t
     JOIN core.contents c ON c.id = t.content_id
     JOIN core.users u ON u.id = t.assigned_to
     JOIN core.contracts ct ON ct.id = c.contract_id
+    LEFT JOIN core.pillars p ON p.id = c.pillar_id
+    LEFT JOIN core.platforms pl ON pl.id = c.platform_id
+    LEFT JOIN core.content_category cc ON cc.id = c.content_category_id
     WHERE t.deleted_at IS NULL AND t.is_active = true
   `;
   const params = [];
@@ -41,22 +67,33 @@ export const getAll = async (query) => {
   sql += ` ORDER BY t.deadline ASC NULLS LAST LIMIT $${idx++} OFFSET $${idx++}`;
   params.push(limit, offset);
   const { rows } = await pool.query(sql, params);
-  return rows;
+  return rows.map(mapTask);
 };
 
 export const getById = async (id) => {
   const { rows } = await pool.query(
     `SELECT t.*, c.title AS content_title, c.contract_id,
-            u.full_name AS assignee_name, ct.contract_name
+            u.full_name AS assignee_name, ct.contract_name,
+            p.pillar_name, pl.platform_name, cc.type_name AS category_name,
+            COALESCE(
+              (SELECT json_agg(r.role_name ORDER BY r.role_name)
+               FROM core.user_roles ur
+               JOIN core.roles r ON r.id = ur.role_id
+               WHERE ur.user_id = t.assigned_to),
+              '[]'::json
+            ) AS assignee_roles
      FROM core.tasks t
      JOIN core.contents c ON c.id = t.content_id
      JOIN core.users u ON u.id = t.assigned_to
      JOIN core.contracts ct ON ct.id = c.contract_id
+     LEFT JOIN core.pillars p ON p.id = c.pillar_id
+     LEFT JOIN core.platforms pl ON pl.id = c.platform_id
+     LEFT JOIN core.content_category cc ON cc.id = c.content_category_id
      WHERE t.id = $1 AND t.deleted_at IS NULL AND t.is_active = true`,
     [id],
   );
   if (!rows[0]) throw new AppError("Task not found", 404);
-  return rows[0];
+  return mapTask(rows[0]);
 };
 
 export const create = async ({

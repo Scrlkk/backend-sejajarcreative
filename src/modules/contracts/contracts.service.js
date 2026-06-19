@@ -49,7 +49,17 @@ export const getAll = async (query) => {
                       '[]'::json
                     ) AS platforms,
                     COALESCE(
-                      (SELECT json_agg(json_build_object('id', u.id, 'full_name', u.full_name))
+                      (SELECT json_agg(json_build_object(
+                         'id', u.id,
+                         'full_name', u.full_name,
+                         'roles', COALESCE(
+                           (SELECT json_agg(r.role_name ORDER BY r.role_name)
+                            FROM core.user_roles ur
+                            JOIN core.roles r ON r.id = ur.role_id
+                            WHERE ur.user_id = u.id),
+                           '[]'::json
+                         )
+                       ))
                        FROM core.contract_teams ct
                        JOIN core.users u ON u.id = ct.user_id
                        WHERE ct.contract_id = c.id),
@@ -89,7 +99,17 @@ export const getById = async (id) => {
               '[]'::json
             ) AS platforms,
             COALESCE(
-              (SELECT json_agg(json_build_object('id', u.id, 'full_name', u.full_name))
+              (SELECT json_agg(json_build_object(
+                 'id', u.id,
+                 'full_name', u.full_name,
+                 'roles', COALESCE(
+                   (SELECT json_agg(r.role_name ORDER BY r.role_name)
+                    FROM core.user_roles ur
+                    JOIN core.roles r ON r.id = ur.role_id
+                    WHERE ur.user_id = u.id),
+                   '[]'::json
+                 )
+               ))
                FROM core.contract_teams ct
                JOIN core.users u ON u.id = ct.user_id
                WHERE ct.contract_id = c.id),
