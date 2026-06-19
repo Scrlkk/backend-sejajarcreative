@@ -5,27 +5,30 @@ Backend REST API untuk Sejajar Content Management System yang mengelola kontrak,
 ---
 
 ## 🚀 Fitur Utama
-* **Autentikasi & Session:** JWT Bearer Token dengan rotasi refresh token otomatis, proteksi route, dan pembatasan berdasarkan hierarki role.
-* **Manajemen Transaksional:** CRUD lengkap untuk Kontrak, Konten, dan Kanban Board Tasks.
-* **Kolaborasi Tim:** Sistem upload task outputs, komentar task, dan workflow review konten multi-step.
-* **Dashboard Kustom per Role:** Summary statistik, metrics uptime, visualisasi chart, dan widget interaktif (seperti calendar event) berdasarkan hak akses pengguna.
-* **Audit & Logs:** Pencatatan otomatis setiap aksi tulis (audit trail) pada tabel `audit.activity_logs`.
-* **API Documentation:** Interaktif Swagger UI tersedia langsung di `/api/docs`.
+
+- **Autentikasi & Session:** JWT Bearer Token dengan rotasi refresh token otomatis, proteksi route, dan pembatasan berdasarkan hierarki role.
+- **Manajemen Transaksional:** CRUD lengkap untuk Kontrak, Konten, dan Kanban Board Tasks.
+- **Kolaborasi Tim:** Sistem upload task outputs, komentar task, dan workflow review konten multi-step.
+- **Dashboard Kustom per Role:** Summary statistik, metrics uptime, visualisasi chart, dan widget interaktif (seperti calendar event) berdasarkan hak akses pengguna.
+- **Audit & Logs:** Pencatatan otomatis setiap aksi tulis (audit trail) pada tabel `audit.activity_logs`.
+- **API Documentation:** Interaktif Swagger UI tersedia langsung di `/api/docs`.
 
 ---
 
 ## 🛠️ Stack Teknologi
-* **Core Framework:** Node.js, Express.js (v5)
-* **Database:** PostgreSQL (dengan driver `pg`)
-* **Keamanan:** Helmet, CORS, Express Rate Limit, bcryptjs
-* **Token:** JSON Web Token (JWT)
-* **Validasi:** Express Validator
-* **Upload:** Multer (Limit 50MB)
-* **Logging:** Winston, Morgan
+
+- **Core Framework:** Node.js, Express.js (v5)
+- **Database:** PostgreSQL (dengan driver `pg`)
+- **Keamanan:** Helmet, CORS, Express Rate Limit, bcryptjs
+- **Token:** JSON Web Token (JWT)
+- **Validasi:** Express Validator
+- **Upload:** Multer (Limit 50MB)
+- **Logging:** Winston, Morgan
 
 ---
 
 ## 📁 Struktur Direktori
+
 ```
 express-sejajar/
 ├── src/
@@ -61,23 +64,30 @@ express-sejajar/
 ## ⚙️ Persyaratan Sistem & Instalasi
 
 ### 1. Prasyarat
-* Node.js versi `>= 18.0.0`
-* PostgreSQL Server berjalan
+
+- Node.js versi `>= 18.0.0`
+- PostgreSQL Server berjalan
 
 ### 2. Instalasi Dependensi
+
 Jalankan perintah berikut di direktori root backend:
+
 ```bash
 npm install
 ```
 
 ### 3. Konfigurasi Environment Variables
+
 Salin file `.env.example` menjadi `.env` lalu lengkapi isinya:
+
 ```bash
 cp .env.example .env
 ```
+
 Sesuaikan parameter database Anda:
-* `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`
-* `JWT_SECRET` dan `JWT_REFRESH_SECRET`
+
+- `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`
+- `JWT_SECRET` dan `JWT_REFRESH_SECRET`
 
 ---
 
@@ -85,15 +95,15 @@ Sesuaikan parameter database Anda:
 
 Proyek ini menggunakan SQL migrations murni. Jalankan perintah NPM berikut untuk menginisiasi database:
 
-* **Menjalankan Migrasi Baru:**
+- **Menjalankan Migrasi Baru:**
   ```bash
   npm run migrate
   ```
-* **Reset Database (Hapus semua tabel & migrasi ulang):**
+- **Reset Database (Hapus semua tabel & migrasi ulang):**
   ```bash
   npm run migrate:fresh
   ```
-* **Menjalankan Seeder (Mengisi dummy data untuk uji coba UI):**
+- **Menjalankan Seeder (Mengisi dummy data untuk uji coba UI):**
   ```bash
   npm run seed
   ```
@@ -102,11 +112,11 @@ Proyek ini menggunakan SQL migrations murni. Jalankan perintah NPM berikut untuk
 
 ## 🏃 Menjalankan Aplikasi
 
-* **Mode Development (dengan Hot-Reload nodemon):**
+- **Mode Development (dengan Hot-Reload nodemon):**
   ```bash
   npm run dev
   ```
-* **Mode Production:**
+- **Mode Production:**
   ```bash
   npm start
   ```
@@ -125,14 +135,19 @@ Saat server berjalan, Anda dapat mengakses dokumentasi API interaktif di:
 ## 🔒 Skema Autentikasi & Authorization
 
 ### Rate Limiting
+
 Sistem menerapkan rate limiting untuk menjaga performa dan keamanan:
-* `POST /api/auth/login` → Maksimal 5x percobaan per 15 menit.
-* `POST /api/auth/refresh` → Maksimal 20x request per 1 jam.
-* Endpoint API lainnya `/api/*` → Maksimal 100x request per 15 menit.
+
+- `POST /api/auth/login` → Maksimal 5x percobaan per 15 menit.
+- `POST /api/auth/refresh` → Maksimal 20x request per 1 jam.
+- Endpoint API lainnya `/api/*` → Maksimal 100x request per 15 menit.
 
 ### Hierarki Role Akses
+
 Hierarki kekuasaan role pengguna diatur secara linier:
+
 ```
 superadmin → owner → content_lead → content_editor / script_writer / admin_social_media
 ```
+
 Setiap endpoint REST API telah diproteksi menggunakan middleware `authorize()` untuk mencocokkan hak akses minimum dari JWT payload pengguna.
