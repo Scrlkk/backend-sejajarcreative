@@ -5,16 +5,23 @@ import { paginate } from "../../utils/pagination.js";
 export const getAll = async (query) => {
   const { limit, offset } = paginate(query);
   let sql = `
-    SELECT t.*, c.title AS content_title, c.contract_id, p.pillar_name,
-           ct.contract_name
+    SELECT t.*, c.title AS content_title, c.contract_id,
+           u.full_name AS assignee_name, ct.contract_name
     FROM core.tasks t
     JOIN core.contents c ON c.id = t.content_id
-    JOIN core.pillars p ON p.id = t.pillar_id
+    JOIN core.users u ON u.id = t.assigned_to
     JOIN core.contracts ct ON ct.id = c.contract_id
-    WHERE t.deleted_at IS NULL
+    WHERE t.deleted_at IS NULL AND t.is_active = true
   `;
   const params = [];
   let idx = 1;
+
+  // Jika tidak mem-filter content_id atau contract_id tertentu, saring agar induknya harus aktif
+  if (!query.content_id && !query.contract_id) {
+    sql += ` AND c.deleted_at IS NULL AND c.is_active = true
+             AND ct.deleted_at IS NULL AND ct.is_active = true`;
+  }
+
   if (query.content_id) {
     sql += ` AND t.content_id = $${idx++}`;
     params.push(query.content_id);
@@ -23,15 +30,15 @@ export const getAll = async (query) => {
     sql += ` AND c.contract_id = $${idx++}`;
     params.push(query.contract_id);
   }
-  if (query.pillar_id) {
-    sql += ` AND t.pillar_id = $${idx++}`;
-    params.push(query.pillar_id);
+  if (query.assigned_to) {
+    sql += ` AND t.assigned_to = $${idx++}`;
+    params.push(query.assigned_to);
   }
   if (query.status) {
     sql += ` AND t.status = $${idx++}`;
     params.push(query.status);
   }
-  sql += ` ORDER BY t.due_date ASC NULLS LAST LIMIT $${idx++} OFFSET $${idx++}`;
+  sql += ` ORDER BY t.deadline ASC NULLS LAST LIMIT $${idx++} OFFSET $${idx++}`;
   params.push(limit, offset);
   const { rows } = await pool.query(sql, params);
   return rows;
@@ -39,13 +46,13 @@ export const getAll = async (query) => {
 
 export const getById = async (id) => {
   const { rows } = await pool.query(
-    `SELECT t.*, c.title AS content_title, c.contract_id, p.pillar_name,
-            ct.contract_name
+    `SELECT t.*, c.title AS content_title, c.contract_id,
+            u.full_name AS assignee_name, ct.contract_name
      FROM core.tasks t
      JOIN core.contents c ON c.id = t.content_id
-     JOIN core.pillars p ON p.id = t.pillar_id
+     JOIN core.users u ON u.id = t.assigned_to
      JOIN core.contracts ct ON ct.id = c.contract_id
-     WHERE t.id = $1 AND t.deleted_at IS NULL`,
+     WHERE t.id = $1 AND t.deleted_at IS NULL AND t.is_active = true`,
     [id],
   );
   if (!rows[0]) throw new AppError("Task not found", 404);
@@ -54,34 +61,30 @@ export const getById = async (id) => {
 
 export const create = async ({
   content_id,
-  pillar_id,
+  assigned_to,
   title,
   description,
-  start_date,
-  due_date,
+  deadline,
 }) => {
-  if (start_date && due_date && new Date(start_date) > new Date(due_date))
-    throw new AppError("start_date tidak boleh melebihi due_date", 422);
-
   const { rows } = await pool.query(
-    `INSERT INTO core.tasks (content_id, pillar_id, title, description, start_date, due_date)
-     VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
-    [content_id, pillar_id, title, description, start_date, due_date],
+    `INSERT INTO core.tasks (content_id, assigned_to, title, description, deadline)
+     VALUES ($1,$2,$3,$4,$5) RETURNING *`,
+    [content_id, assigned_to, title, description, deadline],
   );
   return rows[0];
 };
 
 export const update = async (id, fields) => {
-  if (
-    fields.start_date &&
-    fields.due_date &&
-    new Date(fields.start_date) > new Date(fields.due_date)
-  )
-    throw new AppError("start_date tidak boleh melebihi due_date", 422);
-
-  const allowedFields = ["title", "description", "status", "start_date", "due_date", "pillar_id"];
+  const allowedFields = [
+    "title",
+    "description",
+    "status",
+    "deadline",
+    "assigned_to",
+  ];
   const keys = Object.keys(fields).filter((k) => allowedFields.includes(k));
-  if (!keys.length) throw new AppError("Tidak ada field valid untuk diupdate", 422);
+  if (!keys.length)
+    throw new AppError("Tidak ada field valid untuk diupdate", 422);
 
   const values = keys.map((k) => fields[k]);
   const set = keys.map((k, i) => `${k} = $${i + 1}`).join(", ");

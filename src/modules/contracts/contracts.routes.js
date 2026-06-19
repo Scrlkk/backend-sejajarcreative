@@ -13,13 +13,15 @@ router.use(authenticate);
  * /api/contracts:
  *   get:
  *     tags: [Contracts]
- *     summary: List semua kontrak aktif
+ *     summary: List kontrak aktif atau terhapus
  *     description: |
- *       Mengambil daftar semua kontrak yang masih aktif di sistem.
- *       - Hanya menampilkan kontrak dengan `is_active = true` dan belum dihapus
- *       - Dapat difilter berdasarkan `client_id` dan/atau `status`
- *       - Mendukung pagination via parameter `limit` dan `offset`
- *       - Diurutkan dari kontrak terbaru (ID terbesar terlebih dahulu)
+ *       Mengambil daftar semua kontrak di sistem.
+ *       - Secara default hanya menampilkan kontrak dengan `is_active = true` dan belum dihapus.
+ *       - Jika parameter `status = deleted` dikirim, backend akan mengembalikan kontrak yang telah di-soft-delete (`is_active = false`).
+ *       - Kontrak disaring agar hanya menyertakan kontrak milik client yang masih aktif.
+ *       - Dapat difilter berdasarkan `client_id` dan/atau `status`.
+ *       - Mendukung pagination via parameter `limit` dan `offset`.
+ *       - Diurutkan dari kontrak terbaru (ID terbesar terlebih dahulu).
  *     parameters:
  *       - $ref: '#/components/parameters/LimitQuery'
  *       - $ref: '#/components/parameters/OffsetQuery'
@@ -30,8 +32,8 @@ router.use(authenticate);
  *       - in: query
  *         name: status
  *         schema:
- *           $ref: '#/components/schemas/ContractStatus'
- *         description: Filter berdasarkan status kontrak
+ *           type: string
+ *         description: Filter berdasarkan status kontrak (misal 'active', 'completed', 'cancelled', 'overdue', atau 'deleted' untuk mengambil kontrak terhapus)
  *     responses:
  *       200:
  *         description: Daftar kontrak berhasil diambil

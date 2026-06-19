@@ -169,3 +169,10 @@ notes/
 
 # Hashing files
 scripts/
+
+# User uploaded files
+uploads/
+!uploads/.gitkeep
+
+#coder
+/.qoder

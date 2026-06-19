@@ -18,7 +18,7 @@ const router = Router();
  *       - Endpoint ini **tidak memerlukan autentikasi** (publik)
  *       - Dapat difilter berdasarkan `is_featured` untuk menampilkan hanya konten unggulan
  *       - Diurutkan berdasarkan `display_order` (ASC, null di akhir), kemudian `created_at` terbaru
- *       - Response menyertakan detail konten: `title`, `file_url`, `published_at`, `contract_name`, `type_name`
+ *       - Response menyertakan detail konten: `title`, `content_url`, `published_at`, `contract_name`, `category_name`
  *       - Mendukung pagination via parameter `limit` dan `offset`
  *     security: []
  *     parameters:
@@ -100,7 +100,7 @@ router.post(
  *     description: |
  *       Mengambil data lengkap satu portfolio item berdasarkan ID-nya.
  *       - Endpoint ini **tidak memerlukan autentikasi** (publik)
- *       - Response menyertakan detail konten terkait: `title`, `file_url`, `published_at`, `contract_name`
+ *       - Response menyertakan detail konten terkait: `title`, `content_url`, `published_at`, `contract_name`
  *     security: []
  *     parameters:
  *       - $ref: '#/components/parameters/IdParam'

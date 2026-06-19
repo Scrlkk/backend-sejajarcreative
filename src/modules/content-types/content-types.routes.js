@@ -9,9 +9,9 @@ const router = Router();
 
 /**
  * @swagger
- * /api/content-types:
+ * /api/content-categories:
  *   get:
- *     tags: [Content Types]
+ *     tags: ["Content Categories"]
  *     summary: List semua content type
  *     description: |
  *       Mengambil daftar semua jenis konten yang tersedia di sistem.
@@ -36,9 +36,9 @@ const router = Router();
  *                     data:
  *                       type: array
  *                       items:
- *                         $ref: '#/components/schemas/ContentType'
+ *                         $ref: '#/components/schemas/ContentCategory'
  *   post:
- *     tags: [Content Types]
+ *     tags: ["Content Categories"]
  *     summary: Tambah content type baru
  *     description: |
  *       Mendaftarkan jenis konten baru ke dalam sistem.
@@ -52,7 +52,7 @@ const router = Router();
  *       content:
  *         application/json:
  *           schema:
- *             $ref: '#/components/schemas/CreateContentTypeRequest'
+ *             $ref: '#/components/schemas/CreateContentCategoryRequest'
  *     responses:
  *       201:
  *         description: Content type berhasil ditambahkan
@@ -64,7 +64,7 @@ const router = Router();
  *                 - type: object
  *                   properties:
  *                     data:
- *                       $ref: '#/components/schemas/ContentType'
+ *                       $ref: '#/components/schemas/ContentCategory'
  *       401:
  *         $ref: '#/components/responses/Unauthorized'
  *       403:
@@ -84,9 +84,9 @@ router.post(
 
 /**
  * @swagger
- * /api/content-types/{id}:
+ * /api/content-categories/{id}:
  *   get:
- *     tags: [Content Types]
+ *     tags: ["Content Categories"]
  *     summary: Detail content type
  *     description: |
  *       Mengambil data satu jenis konten berdasarkan ID-nya.
@@ -105,11 +105,11 @@ router.post(
  *                 - type: object
  *                   properties:
  *                     data:
- *                       $ref: '#/components/schemas/ContentType'
+ *                       $ref: '#/components/schemas/ContentCategory'
  *       404:
  *         $ref: '#/components/responses/NotFound'
  *   put:
- *     tags: [Content Types]
+ *     tags: ["Content Categories"]
  *     summary: Update nama content type
  *     description: |
  *       Memperbarui nama jenis konten yang ada.
@@ -124,7 +124,7 @@ router.post(
  *       content:
  *         application/json:
  *           schema:
- *             $ref: '#/components/schemas/UpdateContentTypeRequest'
+ *             $ref: '#/components/schemas/UpdateContentCategoryRequest'
  *     responses:
  *       200:
  *         description: Content type berhasil diperbarui
@@ -136,7 +136,7 @@ router.post(
  *                 - type: object
  *                   properties:
  *                     data:
- *                       $ref: '#/components/schemas/ContentType'
+ *                       $ref: '#/components/schemas/ContentCategory'
  *       401:
  *         $ref: '#/components/responses/Unauthorized'
  *       403:
@@ -146,7 +146,7 @@ router.post(
  *       422:
  *         $ref: '#/components/responses/ValidationError'
  *   delete:
- *     tags: [Content Types]
+ *     tags: ["Content Categories"]
  *     summary: Hapus content type (Hard Delete)
  *     description: |
  *       Menghapus jenis konten secara permanen dari database.

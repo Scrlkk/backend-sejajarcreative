@@ -3,41 +3,31 @@ import AppError from "../../utils/AppError.js";
 import { paginate } from "../../utils/pagination.js";
 
 const listSelect = `
-  SELECT c.*, ct.type_name, co.contract_name,
-         COALESCE(
-           (SELECT json_agg(json_build_object('id', pl.id, 'platform_name', pl.platform_name))
-            FROM core.contents_platforms cp
-            JOIN core.platforms pl ON pl.id = cp.platform_id
-            WHERE cp.content_id = c.id),
-           '[]'::json
-         ) AS platforms
+  SELECT c.*,
+         pl.platform_name,
+         cc.type_name AS category_name,
+         p.pillar_name,
+         co.contract_name,
+         co.contract_code
   FROM core.contents c
-  JOIN core.content_types ct ON ct.id = c.content_type_id
+  JOIN core.platforms pl ON pl.id = c.platform_id
+  JOIN core.content_category cc ON cc.id = c.content_category_id
+  JOIN core.pillars p ON p.id = c.pillar_id AND p.is_active = true
   JOIN core.contracts co ON co.id = c.contract_id
-  WHERE c.deleted_at IS NULL
+  WHERE c.deleted_at IS NULL AND c.is_active = true
 `;
-
-const syncPlatforms = async (client, contentId, platformIds) => {
-  if (!Array.isArray(platformIds)) return;
-  await client.query(
-    "DELETE FROM core.contents_platforms WHERE content_id = $1",
-    [contentId],
-  );
-  if (!platformIds.length) return;
-  const values = platformIds
-    .map((pid, i) => `($1, $${i + 2})`)
-    .join(", ");
-  await client.query(
-    `INSERT INTO core.contents_platforms (content_id, platform_id) VALUES ${values}`,
-    [contentId, ...platformIds],
-  );
-};
 
 export const getAll = async (query) => {
   const { limit, offset } = paginate(query);
   let sql = listSelect;
   const params = [];
   let idx = 1;
+
+  // Jika contract_id tidak disediakan, saring agar kontrak induknya harus aktif
+  if (!query.contract_id) {
+    sql += " AND co.deleted_at IS NULL AND co.is_active = true";
+  }
+
   if (query.contract_id) {
     sql += ` AND c.contract_id = $${idx++}`;
     params.push(query.contract_id);
@@ -46,11 +36,23 @@ export const getAll = async (query) => {
     sql += ` AND c.status = $${idx++}`;
     params.push(query.status);
   }
-  if (query.content_type_id) {
-    sql += ` AND c.content_type_id = $${idx++}`;
-    params.push(query.content_type_id);
+  if (query.platform_id) {
+    sql += ` AND c.platform_id = $${idx++}`;
+    params.push(query.platform_id);
   }
-  sql += ` ORDER BY c.publish_date ASC NULLS LAST LIMIT $${idx++} OFFSET $${idx++}`;
+  if (query.content_category_id) {
+    sql += ` AND c.content_category_id = $${idx++}`;
+    params.push(query.content_category_id);
+  }
+  if (query.pillar_id) {
+    sql += ` AND c.pillar_id = $${idx++}`;
+    params.push(query.pillar_id);
+  }
+  if (query.priority) {
+    sql += ` AND c.priority = $${idx++}`;
+    params.push(query.priority);
+  }
+  sql += ` ORDER BY c.due_date ASC NULLS LAST LIMIT $${idx++} OFFSET $${idx++}`;
   params.push(limit, offset);
   const { rows } = await pool.query(sql, params);
   return rows;
@@ -65,80 +67,68 @@ export const getById = async (id) => {
 export const create = async (data) => {
   const {
     contract_id,
-    content_type_id,
+    platform_id,
+    content_category_id,
+    pillar_id,
     title,
-    file_url,
+    content_url,
+    objective,
+    target_audience,
     description,
-    publish_date,
-    platform_ids,
+    due_date,
+    priority,
   } = data;
 
-  const client = await pool.connect();
-  try {
-    await client.query("BEGIN");
-    const { rows } = await client.query(
-      `INSERT INTO core.contents
-         (contract_id, content_type_id, title, file_url, description, publish_date)
-       VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
-      [contract_id, content_type_id, title, file_url, description, publish_date],
-    );
-    if (platform_ids?.length) {
-      await syncPlatforms(client, rows[0].id, platform_ids);
-    }
-    await client.query("COMMIT");
-    return getById(rows[0].id);
-  } catch (e) {
-    await client.query("ROLLBACK");
-    throw e;
-  } finally {
-    client.release();
-  }
+  const { rows } = await pool.query(
+    `INSERT INTO core.contents
+       (contract_id, platform_id, content_category_id, pillar_id, title,
+        content_url, objective, target_audience, description, due_date, priority)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
+    [
+      contract_id,
+      platform_id,
+      content_category_id,
+      pillar_id,
+      title,
+      content_url,
+      objective,
+      target_audience,
+      description,
+      due_date,
+      priority,
+    ],
+  );
+  return getById(rows[0].id);
 };
 
 export const update = async (id, fields) => {
-  const { platform_ids, ...rest } = fields;
   const allowedFields = [
     "title",
     "description",
     "status",
-    "content_type_id",
-    "file_url",
-    "publish_date",
+    "platform_id",
+    "content_category_id",
+    "pillar_id",
+    "content_url",
+    "objective",
+    "target_audience",
+    "due_date",
+    "priority",
     "published_at",
   ];
-  const keys = Object.keys(rest).filter((k) => allowedFields.includes(k));
+  const keys = Object.keys(fields).filter((k) => allowedFields.includes(k));
+  if (!keys.length)
+    throw new AppError("Tidak ada field valid untuk diupdate", 422);
 
-  const client = await pool.connect();
-  try {
-    await client.query("BEGIN");
-
-    if (keys.length) {
-      const values = keys.map((k) => rest[k]);
-      const set = keys.map((k, i) => `${k} = $${i + 1}`).join(", ");
-      const { rows } = await client.query(
-        `UPDATE core.contents SET ${set}, updated_at = now()
-         WHERE id = $${keys.length + 1} AND deleted_at IS NULL RETURNING id`,
-        [...values, id],
-      );
-      if (!rows[0]) throw new AppError("Content not found", 404);
-    }
-
-    if (platform_ids !== undefined) {
-      await syncPlatforms(client, id, platform_ids);
-    }
-
-    if (!keys.length && platform_ids === undefined) {
-      throw new AppError("Tidak ada field valid untuk diupdate", 422);
-    }
-
-    await client.query("COMMIT");
-    return getById(id);
-  } catch (e) {
-    await client.query("ROLLBACK");
-    throw e;
-  } finally {
-    client.release();
-  }
+  const values = keys.map((k) => fields[k]);
+  const set = keys.map((k, i) => `${k} = $${i + 1}`).join(", ");
+  const { rows } = await pool.query(
+    `UPDATE core.contents SET ${set}, updated_at = now()
+     WHERE id = $${keys.length + 1} AND deleted_at IS NULL RETURNING id`,
+    [...values, id],
+  );
+  if (!rows[0]) throw new AppError("Content not found", 404);
+  return getById(id);
 };
 
 export const remove = async (id) => {
@@ -158,6 +148,7 @@ export const publish = async (id) => {
      RETURNING *`,
     [id],
   );
-  if (!rows[0]) throw new AppError("Content not found atau belum berstatus approved", 422);
+  if (!rows[0])
+    throw new AppError("Content not found atau belum berstatus approved", 422);
   return getById(id);
 };

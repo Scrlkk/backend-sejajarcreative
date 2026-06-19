@@ -20,18 +20,15 @@ CREATE TABLE IF NOT EXISTS core.users (
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON core.users (email);
-CREATE INDEX IF NOT EXISTS idx_users_is_active ON core.users (is_active);
+CREATE INDEX IF NOT EXISTS idx_users_full_name ON core.users (full_name);
 
 CREATE TABLE IF NOT EXISTS core.user_roles (
-  id      SERIAL PRIMARY KEY,
   user_id INT NOT NULL,
   role_id INT NOT NULL,
 
+  CONSTRAINT pk_user_roles PRIMARY KEY (user_id, role_id),
   CONSTRAINT fk_user_roles_user
     FOREIGN KEY (user_id) REFERENCES core.users (id) ON DELETE CASCADE,
   CONSTRAINT fk_user_roles_role
-    FOREIGN KEY (role_id) REFERENCES core.roles (id) ON DELETE CASCADE,
-  CONSTRAINT uq_user_roles UNIQUE (user_id, role_id)
+    FOREIGN KEY (role_id) REFERENCES core.roles (id) ON DELETE CASCADE
 );
-
-CREATE INDEX IF NOT EXISTS idx_user_roles_user ON core.user_roles (user_id);

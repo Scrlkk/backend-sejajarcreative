@@ -5,7 +5,7 @@ import { closePool } from "./src/config/database.js";
 
 const server = app.listen(env.port, () => {
   console.log("");
-  console.log("  🚀 express-sejajar berjalan");
+  console.log("     express-sejajar running");
   console.log(`     URL         : http://localhost:${env.port}`);
   console.log(`     Environment : ${env.nodeEnv}`);
   console.log(

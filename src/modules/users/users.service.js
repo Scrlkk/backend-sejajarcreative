@@ -48,15 +48,12 @@ export const getAll = async (query) => {
 };
 
 export const getById = async (id) => {
-  const { rows } = await pool.query(
-    `${userListSelect} AND u.id = $1`,
-    [id],
-  );
+  const { rows } = await pool.query(`${userListSelect} AND u.id = $1`, [id]);
   if (!rows[0]) throw new AppError("User not found", 404);
   return mapUser(rows[0]);
 };
 
-export const create = async ({ full_name, email, password, role }) => {
+export const create = async ({ full_name, email, password, roles }) => {
   const hashed = await hash(password);
   const client = await pool.connect();
   try {
@@ -66,12 +63,14 @@ export const create = async ({ full_name, email, password, role }) => {
        VALUES ($1,$2,$3) RETURNING id, full_name, email, created_at`,
       [full_name, email, hashed],
     );
-    if (role) {
-      await assignUserRole(rows[0].id, role, client);
+    if (roles?.length) {
+      for (const roleName of roles) {
+        await assignUserRole(rows[0].id, roleName, client);
+      }
     }
     await client.query("COMMIT");
-    const roles = await fetchRoleNamesByUserId(rows[0].id);
-    return { ...rows[0], roles, role: pickPrimaryRole(roles) };
+    const roleNames = await fetchRoleNamesByUserId(rows[0].id);
+    return { ...rows[0], roles: roleNames, role: pickPrimaryRole(roleNames) };
   } catch (e) {
     await client.query("ROLLBACK");
     throw e;
@@ -81,7 +80,7 @@ export const create = async ({ full_name, email, password, role }) => {
 };
 
 export const update = async (id, fields) => {
-  const { role, ...userFields } = fields;
+  const { roles, ...userFields } = fields;
   const { rows: userCheck } = await pool.query(
     "SELECT id FROM core.users WHERE id = $1 AND is_active = true AND deleted_at IS NULL",
     [id],
@@ -89,14 +88,17 @@ export const update = async (id, fields) => {
   if (!userCheck[0])
     throw new AppError("User tidak ditemukan atau tidak aktif", 404);
 
-  if (userFields.password) userFields.password = await hash(userFields.password);
+  if (userFields.password)
+    userFields.password = await hash(userFields.password);
 
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
 
     const allowedFields = ["full_name", "email", "password"];
-    const keys = Object.keys(userFields).filter((k) => allowedFields.includes(k));
+    const keys = Object.keys(userFields).filter((k) =>
+      allowedFields.includes(k),
+    );
 
     if (keys.length) {
       const values = keys.map((k) => userFields[k]);
@@ -108,16 +110,22 @@ export const update = async (id, fields) => {
       );
     }
 
-    if (role) {
-      await client.query("DELETE FROM core.user_roles WHERE user_id = $1", [id]);
-      await assignUserRole(id, role, client);
+    if (roles !== undefined) {
+      await client.query("DELETE FROM core.user_roles WHERE user_id = $1", [
+        id,
+      ]);
+      for (const roleName of roles) {
+        await assignUserRole(id, roleName, client);
+      }
     }
 
     if (userFields.password) {
-      await client.query("DELETE FROM auth.refresh_tokens WHERE user_id = $1", [id]);
+      await client.query("DELETE FROM auth.refresh_tokens WHERE user_id = $1", [
+        id,
+      ]);
     }
 
-    if (!keys.length && !role) {
+    if (!keys.length && roles === undefined) {
       throw new AppError("Tidak ada field valid untuk diupdate", 422);
     }
 

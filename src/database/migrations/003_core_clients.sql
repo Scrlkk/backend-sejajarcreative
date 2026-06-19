@@ -9,3 +9,6 @@ CREATE TABLE IF NOT EXISTS core.clients (
   created_at    TIMESTAMP DEFAULT now(),
   updated_at    TIMESTAMP DEFAULT now()
 );
+
+CREATE INDEX IF NOT EXISTS idx_clients_client_name ON core.clients (client_name);
+CREATE INDEX IF NOT EXISTS idx_clients_company_name ON core.clients (company_name);

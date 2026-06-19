@@ -2,11 +2,17 @@ import pool from "../../config/database.js";
 import AppError from "../../utils/AppError.js";
 import { paginate } from "../../utils/pagination.js";
 
-export const record = async ({ content_id, likes, views }) => {
+export const record = async ({
+  content_id,
+  likes,
+  views,
+  comments,
+  shares,
+}) => {
   const { rows } = await pool.query(
-    `INSERT INTO analytics.engagements (content_id, likes, views)
-     VALUES ($1,$2,$3) RETURNING *`,
-    [content_id, likes ?? 0, views ?? 0],
+    `INSERT INTO analytics.engagements (content_id, likes, views, comments, shares)
+     VALUES ($1,$2,$3,$4,$5) RETURNING *`,
+    [content_id, likes ?? 0, views ?? 0, comments ?? 0, shares ?? 0],
   );
   return rows[0];
 };
@@ -29,6 +35,8 @@ export const getSummary = async (contentId) => {
        content_id,
        SUM(likes) AS total_likes,
        SUM(views) AS total_views,
+       SUM(comments) AS total_comments,
+       SUM(shares) AS total_shares,
        COUNT(*) AS total_records,
        MIN(recorded_at) AS first_recorded,
        MAX(recorded_at) AS last_recorded
@@ -52,11 +60,14 @@ export const getTopContents = async (query) => {
       co.contract_name,
       c.status,
       COALESCE(SUM(e.views), 0) AS total_views,
-      COALESCE(SUM(e.likes), 0) AS total_likes
+      COALESCE(SUM(e.likes), 0) AS total_likes,
+      COALESCE(SUM(e.comments), 0) AS total_comments,
+      COALESCE(SUM(e.shares), 0) AS total_shares
     FROM core.contents c
     LEFT JOIN analytics.engagements e ON e.content_id = c.id
     LEFT JOIN core.contracts co ON co.id = c.contract_id
-    WHERE c.deleted_at IS NULL
+    WHERE c.deleted_at IS NULL AND c.is_active = true
+      AND co.deleted_at IS NULL AND co.is_active = true
   `;
   const params = [];
   let idx = 1;

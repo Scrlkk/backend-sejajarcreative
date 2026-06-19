@@ -16,10 +16,12 @@ router.use(authenticate);
  *     summary: List semua konten
  *     description: |
  *       Mengambil daftar konten berdasarkan filter yang diberikan.
- *       - Dapat difilter berdasarkan `contract_id`, `status`, dan/atau `content_type_id`
- *       - Hanya menampilkan konten yang belum dihapus (`deleted_at IS NULL`)
- *       - Response menyertakan daftar platform yang terkait (`platforms[]`)
- *       - Diurutkan berdasarkan `publish_date` terdekat (ASC, null di akhir)
+ *       - Dapat difilter berdasarkan `contract_id`, `status`, `platform_id`, `content_category_id`, `pillar_id`, dan/atau `priority`
+ *       - Hanya menampilkan konten yang belum dihapus (`deleted_at IS NULL` dan `is_active = true`)
+ *       - Secara default, jika `contract_id` tidak dikirim, konten dari kontrak yang terhapus/tidak aktif akan otomatis disembunyikan.
+ *       - Jika `contract_id` dikirim (untuk tracking), konten dari kontrak tersebut tetap ditampilkan meskipun kontrak induknya sudah tidak aktif.
+ *       - Response menyertakan `platform_name`, `category_name`, `pillar_name`, `contract_name`, `contract_code`
+ *       - Diurutkan berdasarkan `due_date` terdekat (ASC, null di akhir)
  *       - Mendukung pagination via parameter `limit` dan `offset`
  *     parameters:
  *       - $ref: '#/components/parameters/LimitQuery'
@@ -34,9 +36,22 @@ router.use(authenticate);
  *           $ref: '#/components/schemas/ContentStatus'
  *         description: Filter berdasarkan status konten
  *       - in: query
- *         name: content_type_id
+ *         name: platform_id
  *         schema: { type: integer }
- *         description: Filter berdasarkan jenis konten
+ *         description: Filter berdasarkan platform
+ *       - in: query
+ *         name: content_category_id
+ *         schema: { type: integer }
+ *         description: Filter berdasarkan kategori konten
+ *       - in: query
+ *         name: pillar_id
+ *         schema: { type: integer }
+ *         description: Filter berdasarkan pillar
+ *       - in: query
+ *         name: priority
+ *         schema:
+ *           $ref: '#/components/schemas/ContentPriority'
+ *         description: Filter berdasarkan prioritas
  *     responses:
  *       200:
  *         description: Daftar konten berhasil diambil
@@ -58,8 +73,7 @@ router.use(authenticate);
  *     summary: Buat konten baru
  *     description: |
  *       Membuat konten baru yang dikaitkan ke kontrak tertentu.
- *       - `contract_id` dan `content_type_id` harus merujuk ke data yang valid
- *       - Field `platform_ids` opsional — berisi array ID platform yang ditargetkan
+ *       - `contract_id`, `platform_id`, `content_category_id`, dan `pillar_id` harus merujuk ke data yang valid
  *       - Status awal konten adalah **draft**
  *       - Tersedia untuk: **superadmin**, **owner**, **content_lead**, **content_editor**, **script_writer**
  *     requestBody:
@@ -110,7 +124,7 @@ router.post(
  *     summary: Detail konten
  *     description: |
  *       Mengambil data lengkap satu konten beserta platform dan informasi kontrak terkait.
- *       - Response menyertakan `platforms[]`, `contract_name`, dan `type_name`
+ *       - Response menyertakan `platform_name`, `category_name`, `pillar_name`, `contract_name`, `contract_code`
  *       - Hanya konten yang belum dihapus yang dapat diakses
  *     parameters:
  *       - $ref: '#/components/parameters/IdParam'
@@ -136,8 +150,7 @@ router.post(
  *     description: |
  *       Memperbarui data konten yang ada.
  *       - Field yang tidak dikirim **tidak akan diubah** (partial update)
- *       - Field `platform_ids` jika dikirim akan **menggantikan** semua platform sebelumnya
- *       - Perubahan `status` mengikuti alur: `draft → in_review → approved → published`
+ *       - Perubahan `status` mengikuti alur workflow konten
  *       - Untuk publish konten yang sudah approved, gunakan **`PATCH /api/contents/{id}/publish`**
  *       - Tersedia untuk: **superadmin**, **owner**, **content_lead**, **content_editor**, **script_writer**
  *     parameters:
@@ -174,7 +187,7 @@ router.post(
  *     description: |
  *       Menonaktifkan konten tanpa menghapus datanya dari database.
  *       - Data konten tetap tersimpan untuk keperluan audit trail
- *       - Relasi data (tasks, task_assignments, reviews, analytics) tetap terjaga
+ *       - Relasi data (tasks, task_outputs, task_comments, reviews, analytics) tetap terjaga
  *       - Konten yang dihapus tidak akan muncul di list `GET /api/contents`
  *       - Tersedia untuk: **superadmin**, **owner**, **content_lead**
  *     parameters:

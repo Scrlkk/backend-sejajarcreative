@@ -1,4 +1,5 @@
 import pool from "../../config/database.js";
+import logger from "../../config/logger.js";
 import { compare } from "../../utils/hash.js";
 import { signAccess, signRefresh, verifyRefresh } from "../../utils/jwt.js";
 import AppError from "../../utils/AppError.js";
@@ -7,13 +8,40 @@ import {
   pickPrimaryRole,
 } from "../../utils/userRoles.js";
 
+/**
+ * Fire-and-forget insert ke audit.activity_logs.
+ * Tidak pernah throw — error hanya di-log.
+ */
+const logActivity = (userId, action, extra = {}) => {
+  pool
+    .query(
+      `INSERT INTO audit.activity_logs
+         (user_id, action, table_name, ip_address, user_agent)
+         VALUES ($1,$2,$3,$4,$5)`,
+      [
+        userId,
+        action,
+        'core.users',
+        extra.ip   || null,
+        extra.ua   || null,
+      ],
+    )
+    .catch((err) =>
+      logger.error('[Auth] Failed to write activity log', {
+        error: err.message,
+        userId,
+        action,
+      }),
+    );
+};
+
 const buildTokenPayload = async (userId, email) => {
   const roles = await fetchRoleNamesByUserId(userId);
   const role = pickPrimaryRole(roles);
   return { id: userId, email, role, roles };
 };
 
-export const login = async (email, password) => {
+export const login = async (email, password, extra = {}) => {
   const { rows } = await pool.query(
     "SELECT id, full_name, email, password, is_active FROM core.users WHERE email = $1 AND deleted_at IS NULL",
     [email],
@@ -37,6 +65,8 @@ export const login = async (email, password) => {
     "INSERT INTO auth.refresh_tokens (user_id, token, expires_at) VALUES ($1,$2,$3)",
     [user.id, refreshToken, expiresAt],
   );
+
+  logActivity(user.id, 'LOGIN', extra);
 
   return {
     user: {
@@ -86,6 +116,14 @@ export const refresh = async (token) => {
   return { accessToken, refreshToken };
 };
 
-export const logout = async (token) => {
-  await pool.query("DELETE FROM auth.refresh_tokens WHERE token = $1", [token]);
+export const logout = async (token, extra = {}) => {
+  // Cari user_id sebelum token dihapus agar bisa dicatat
+  const { rows } = await pool.query(
+    'SELECT user_id FROM auth.refresh_tokens WHERE token = $1',
+    [token],
+  );
+  await pool.query('DELETE FROM auth.refresh_tokens WHERE token = $1', [token]);
+  if (rows[0]?.user_id) {
+    logActivity(rows[0].user_id, 'LOGOUT', extra);
+  }
 };

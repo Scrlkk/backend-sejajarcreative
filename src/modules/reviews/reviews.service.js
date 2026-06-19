@@ -2,58 +2,25 @@ import pool from "../../config/database.js";
 import AppError from "../../utils/AppError.js";
 import { paginate } from "../../utils/pagination.js";
 
-export const getByTaskAssignment = async (assignmentId, query) => {
+export const getByContent = async (contentId, query) => {
   const { limit, offset } = paginate(query);
   const { rows } = await pool.query(
-    `SELECT r.*, u.full_name AS reviewer_name
-     FROM core.reviews r
-     JOIN core.users u ON u.id = r.reviewer_id
-     WHERE r.task_assignment_id = $1 AND r.deleted_at IS NULL
-     ORDER BY r.reviewed_at DESC NULLS LAST, r.created_at DESC
+    `SELECT cr.*, u.full_name AS reviewer_name
+     FROM core.content_reviews cr
+     JOIN core.users u ON u.id = cr.reviewer_id
+     WHERE cr.content_id = $1 AND cr.deleted_at IS NULL
+     ORDER BY cr.created_at DESC
      LIMIT $2 OFFSET $3`,
-    [assignmentId, limit, offset],
+    [contentId, limit, offset],
   );
   return rows;
 };
 
-export const create = async (assignmentId, reviewerId, { feedback, status }) => {
-  const { rows: assignmentRows } = await pool.query(
-    `SELECT ta.id, ta.task_id, ta.status AS assignment_status
-     FROM core.task_assignments ta
-     WHERE ta.id = $1 AND ta.deleted_at IS NULL`,
-    [assignmentId],
+export const create = async (reviewerId, { content_id, feedback }) => {
+  const { rows } = await pool.query(
+    `INSERT INTO core.content_reviews (content_id, reviewer_id, feedback)
+     VALUES ($1,$2,$3) RETURNING *`,
+    [content_id, reviewerId, feedback],
   );
-  if (!assignmentRows[0]) throw new AppError("Task assignment not found", 404);
-
-  const client = await pool.connect();
-  try {
-    await client.query("BEGIN");
-
-    const { rows } = await client.query(
-      `INSERT INTO core.reviews (task_assignment_id, reviewer_id, feedback, status, reviewed_at)
-       VALUES ($1,$2,$3,$4,now()) RETURNING *`,
-      [assignmentId, reviewerId, feedback, status],
-    );
-
-    const newAssignmentStatus = status === "approved" ? "done" : "in_progress";
-    await client.query(
-      `UPDATE core.task_assignments SET status = $1 WHERE id = $2`,
-      [newAssignmentStatus, assignmentId],
-    );
-
-    if (status === "approved") {
-      await client.query(
-        `UPDATE core.tasks SET status = 'done', updated_at = now() WHERE id = $1`,
-        [assignmentRows[0].task_id],
-      );
-    }
-
-    await client.query("COMMIT");
-    return rows[0];
-  } catch (e) {
-    await client.query("ROLLBACK");
-    throw e;
-  } finally {
-    client.release();
-  }
+  return rows[0];
 };

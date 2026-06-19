@@ -22,19 +22,33 @@ export const createRules = [
   body("password")
     .isLength({ min: 8, max: 128 })
     .matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[a-zA-Z\d@$!%*?&]/)
-    .withMessage("Password minimal 8 karakter dengan huruf besar, huruf kecil, angka, dan simbol (@$!%*?&)"),
-  body("role")
-    .notEmpty().withMessage("Role wajib diisi")
-    .isIn(validRoles).withMessage(`Role harus salah satu dari: ${validRoles.join(", ")}`),
+    .withMessage(
+      "Password minimal 8 karakter dengan huruf besar, huruf kecil, angka, dan simbol (@$!%*?&)",
+    ),
+  body("roles")
+    .isArray({ min: 1 })
+    .withMessage("Minimal satu role wajib diisi")
+    .custom((arr) => arr.every((r) => validRoles.includes(r)))
+    .withMessage(`Setiap role harus salah satu dari: ${validRoles.join(", ")}`),
 ];
 
 export const updateRules = [
-  body("email").optional().isEmail().normalizeEmail().withMessage("Email tidak valid"),
+  body("email")
+    .optional()
+    .isEmail()
+    .normalizeEmail()
+    .withMessage("Email tidak valid"),
   body("password")
     .optional()
     .isLength({ min: 8, max: 128 })
     .matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[a-zA-Z\d@$!%*?&]/)
-    .withMessage("Password minimal 8 karakter dengan huruf besar, huruf kecil, angka, dan simbol (@$!%*?&)"),
-  body("role").optional().isIn(validRoles).withMessage(`Role harus salah satu dari: ${validRoles.join(", ")}`),
+    .withMessage(
+      "Password minimal 8 karakter dengan huruf besar, huruf kecil, angka, dan simbol (@$!%*?&)",
+    ),
+  body("roles")
+    .optional()
+    .isArray({ min: 1 })
+    .withMessage("Minimal satu role harus dikirim")
+    .custom((arr) => arr.every((r) => validRoles.includes(r)))
+    .withMessage(`Setiap role harus salah satu dari: ${validRoles.join(", ")}`),
 ];
-

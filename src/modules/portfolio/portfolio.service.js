@@ -7,14 +7,14 @@ export const getAll = async (query) => {
   let sql = `
     SELECT
       pi.id, pi.is_featured, pi.display_order, pi.created_at,
-      c.id AS content_id, c.title, c.file_url, c.description,
+      c.id AS content_id, c.title, c.content_url, c.description,
       c.published_at, c.status,
-      co.contract_name, ct.type_name
+      co.contract_name, cc.type_name AS category_name
     FROM public.portfolio_items pi
-    JOIN core.contents c ON c.id = pi.content_id
-    JOIN core.contracts co ON co.id = c.contract_id
-    JOIN core.content_types ct ON ct.id = c.content_type_id
-    WHERE c.deleted_at IS NULL
+    JOIN core.contents c ON c.id = pi.content_id AND c.deleted_at IS NULL AND c.is_active = true
+    JOIN core.contracts co ON co.id = c.contract_id AND co.deleted_at IS NULL AND co.is_active = true
+    JOIN core.content_category cc ON cc.id = c.content_category_id
+    WHERE 1=1
   `;
   const params = [];
   let idx = 1;
@@ -33,13 +33,13 @@ export const getById = async (id) => {
   const { rows } = await pool.query(
     `SELECT
        pi.id, pi.is_featured, pi.display_order, pi.created_at,
-       c.id AS content_id, c.title, c.file_url, c.description,
+       c.id AS content_id, c.title, c.content_url, c.description,
        c.published_at, c.status,
-       co.contract_name, ct.type_name
+       co.contract_name, cc.type_name AS category_name
      FROM public.portfolio_items pi
-     JOIN core.contents c ON c.id = pi.content_id
-     JOIN core.contracts co ON co.id = c.contract_id
-     JOIN core.content_types ct ON ct.id = c.content_type_id
+     JOIN core.contents c ON c.id = pi.content_id AND c.deleted_at IS NULL AND c.is_active = true
+     JOIN core.contracts co ON co.id = c.contract_id AND co.deleted_at IS NULL AND co.is_active = true
+     JOIN core.content_category cc ON cc.id = c.content_category_id
      WHERE pi.id = $1`,
     [id],
   );
@@ -70,7 +70,8 @@ export const create = async ({ content_id, is_featured, display_order }) => {
 export const update = async (id, fields) => {
   const allowedFields = ["is_featured", "display_order"];
   const keys = Object.keys(fields).filter((k) => allowedFields.includes(k));
-  if (!keys.length) throw new AppError("Tidak ada field valid untuk diupdate", 422);
+  if (!keys.length)
+    throw new AppError("Tidak ada field valid untuk diupdate", 422);
 
   const values = keys.map((k) => fields[k]);
   const set = keys.map((k, i) => `${k} = $${i + 1}`).join(", ");

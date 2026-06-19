@@ -49,7 +49,8 @@ router.use(authenticate);
  *       - Hanya **superadmin** yang dapat membuat user baru
  *       - Password akan di-hash sebelum disimpan ke database
  *       - Email harus unik — tidak boleh duplikat dengan user yang sudah ada
- *       - Field `role` wajib diisi dan harus sesuai dengan role yang tersedia
+ *       - Field `roles` wajib diisi (array) dan setiap role harus sesuai dengan role yang tersedia
+ *       - User dapat memiliki beberapa role sekaligus (many-to-many)
  *       - User baru langsung aktif (`is_active = true`) setelah dibuat
  *     requestBody:
  *       required: true
@@ -128,7 +129,8 @@ router.post(
  *       Memperbarui data user yang ada.
  *       - Hanya **superadmin** yang dapat mengubah data user lain
  *       - Field yang tidak dikirim **tidak akan diubah** (partial update)
- *       - Jika field `role` dikirim, role lama akan **diganti** (bukan ditambahkan)
+ *       - Jika field `roles` dikirim (array), semua role lama akan **diganti** dengan role baru
+ *       - User dapat memiliki beberapa role sekaligus (many-to-many)
  *       - Jika field `password` dikirim, akan langsung di-hash ulang
  *       - Minimal harus ada 1 field yang diupdate
  *     parameters:

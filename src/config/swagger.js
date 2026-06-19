@@ -126,23 +126,37 @@ superadmin → owner → content_lead → content_editor / script_writer / admin
         },
         ContractStatus: {
           type: "string",
-          enum: ["planning", "ongoing", "review", "completed", "cancelled"],
+          enum: ["active", "completed", "cancelled", "overdue"],
         },
-        AssignmentRole: {
+        ContentPriority: {
           type: "string",
-          enum: ["scriptwriter", "content_editor", "social_media_admin"],
+          enum: ["low", "medium", "high"],
         },
         TaskStatus: {
           type: "string",
-          enum: ["pending", "in_progress", "review", "done"],
+          enum: [
+            "to_do",
+            "on_progress",
+            "review",
+            "revision",
+            "approved",
+            "scheduled",
+            "published",
+            "overdue",
+          ],
         },
         ContentStatus: {
           type: "string",
-          enum: ["draft", "in_review", "approved", "published"],
-        },
-        ReviewStatus: {
-          type: "string",
-          enum: ["revision", "approved"],
+          enum: [
+            "draft",
+            "assigned",
+            "on_progress",
+            "review",
+            "revision",
+            "approved",
+            "published",
+            "overdue",
+          ],
         },
 
         // ─ Auth ───────────────────────────────────────────────────
@@ -191,13 +205,23 @@ superadmin → owner → content_lead → content_editor / script_writer / admin
             id: { type: "integer", example: 1 },
             full_name: { type: "string", example: "Super Admin" },
             email: { type: "string", example: "superadmin@sejajar.id" },
-            role: { $ref: "#/components/schemas/UserRole" },
+            roles: {
+              type: "array",
+              items: { $ref: "#/components/schemas/UserRole" },
+              example: ["superadmin"],
+              description: "Daftar role user (many-to-many)",
+            },
+            role: {
+              $ref: "#/components/schemas/UserRole",
+              description:
+                "Role utama (prioritas tertinggi) — untuk backward compatibility",
+            },
             created_at: { type: "string", format: "date-time" },
           },
         },
         CreateUserRequest: {
           type: "object",
-          required: ["full_name", "email", "password", "role"],
+          required: ["full_name", "email", "password", "roles"],
           properties: {
             full_name: { type: "string", example: "John Doe" },
             email: {
@@ -211,7 +235,13 @@ superadmin → owner → content_lead → content_editor / script_writer / admin
               minLength: 8,
               example: "Password@123",
             },
-            role: { $ref: "#/components/schemas/UserRole" },
+            roles: {
+              type: "array",
+              minItems: 1,
+              items: { $ref: "#/components/schemas/UserRole" },
+              example: ["content_editor"],
+              description: "Daftar role untuk user baru (bisa lebih dari satu)",
+            },
           },
         },
         UpdateUserRequest: {
@@ -220,7 +250,14 @@ superadmin → owner → content_lead → content_editor / script_writer / admin
             full_name: { type: "string", example: "John Doe Updated" },
             email: { type: "string", format: "email" },
             password: { type: "string", format: "password", minLength: 8 },
-            role: { $ref: "#/components/schemas/UserRole" },
+            roles: {
+              type: "array",
+              minItems: 1,
+              items: { $ref: "#/components/schemas/UserRole" },
+              example: ["content_editor", "script_writer"],
+              description:
+                "Daftar role baru — akan menggantikan semua role lama",
+            },
           },
         },
 
@@ -285,33 +322,33 @@ superadmin → owner → content_lead → content_editor / script_writer / admin
           },
         },
 
-        // ─ Content Type ───────────────────────────────────────────
-        ContentType: {
+        // ─ Content Type / Category ───────────────────────────────────────────
+        ContentCategory: {
           type: "object",
           properties: {
             id: { type: "integer", example: 1 },
-            type_name: { type: "string", example: "Reels" },
+            type_name: { type: "string", example: "tutorial" },
             created_at: { type: "string", format: "date-time" },
           },
         },
-        CreateContentTypeRequest: {
+        CreateContentCategoryRequest: {
           type: "object",
           required: ["type_name"],
           properties: {
             type_name: {
               type: "string",
               maxLength: 100,
-              example: "Reels",
+              example: "tutorial",
             },
           },
         },
-        UpdateContentTypeRequest: {
+        UpdateContentCategoryRequest: {
           type: "object",
           properties: {
             type_name: {
               type: "string",
               maxLength: 100,
-              example: "Reels Video",
+              example: "tutorial_v2",
             },
           },
         },
@@ -375,6 +412,7 @@ superadmin → owner → content_lead → content_editor / script_writer / admin
             id: { type: "integer", example: 1 },
             client_id: { type: "integer", example: 1 },
             client_name: { type: "string", example: "PT Maju Bersama" },
+            contract_code: { type: "string", example: "CTR-2025-001" },
             contract_name: { type: "string", example: "Campaign Ramadan 2025" },
             description: {
               type: "string",
@@ -386,17 +424,23 @@ superadmin → owner → content_lead → content_editor / script_writer / admin
               example: "2025-03-01",
             },
             end_date: { type: "string", format: "date", example: "2025-04-15" },
+            revenue: { type: "number", example: 25000000 },
             status: { $ref: "#/components/schemas/ContractStatus" },
             created_by: { type: "integer", example: 1 },
-            created_by_name: { type: "string", example: "Owner Sejajar" },
+            created_by_name: { type: "string", example: "Super Admin" },
+            lead_by: { type: "integer", example: 2 },
+            lead_by_name: { type: "string", example: "Owner Sejajar" },
+            platforms: { type: "array", items: { type: "object" } },
+            teams: { type: "array", items: { type: "object" } },
             created_at: { type: "string", format: "date-time" },
           },
         },
         CreateContractRequest: {
           type: "object",
-          required: ["client_id", "contract_name"],
+          required: ["client_id", "contract_code", "contract_name", "lead_by"],
           properties: {
             client_id: { type: "integer", example: 1 },
+            contract_code: { type: "string", example: "CTR-2025-001" },
             contract_name: { type: "string", example: "Campaign Ramadan 2025" },
             description: {
               type: "string",
@@ -408,40 +452,42 @@ superadmin → owner → content_lead → content_editor / script_writer / admin
               example: "2025-03-01",
             },
             end_date: { type: "string", format: "date", example: "2025-04-15" },
+            revenue: { type: "number", example: 25000000 },
+            lead_by: { type: "integer", example: 2 },
+            platform_ids: {
+              type: "array",
+              items: { type: "integer" },
+              example: [1, 2],
+            },
+            team_user_ids: {
+              type: "array",
+              items: { type: "integer" },
+              example: [3, 4, 5],
+            },
           },
         },
         UpdateContractRequest: {
           type: "object",
-          description:
-            "Update contract (field yang dikirim akan diupdate, field yang tidak dikirim tetap)",
           properties: {
             contract_name: {
               type: "string",
               example: "Campaign Ramadan 2025 - Revisi",
             },
-            description: {
-              type: "string",
-              example:
-                "Kampanye marketing komprehensif dengan fokus pada edukasi dan engagement",
-            },
+            description: { type: "string" },
             start_date: {
               type: "string",
               format: "date",
               example: "2025-03-01",
             },
-            end_date: {
-              type: "string",
-              format: "date",
-              example: "2025-04-15",
-            },
+            end_date: { type: "string", format: "date", example: "2025-04-15" },
+            revenue: { type: "number", example: 30000000 },
+            lead_by: { type: "integer", example: 2 },
             status: {
               $ref: "#/components/schemas/ContractStatus",
-              example: "ongoing",
+              example: "active",
             },
-          },
-          example: {
-            contract_name: "Campaign Ramadan 2025 - Revisi",
-            status: "ongoing",
+            platform_ids: { type: "array", items: { type: "integer" } },
+            team_user_ids: { type: "array", items: { type: "integer" } },
           },
         },
 
@@ -455,8 +501,8 @@ superadmin → owner → content_lead → content_editor / script_writer / admin
               type: "string",
               example: "Tips Produktif di Bulan Ramadan",
             },
-            pillar_id: { type: "integer", example: 1 },
-            pillar_name: { type: "string", example: "Edukasi" },
+            assigned_to: { type: "integer", example: 5 },
+            assignee_name: { type: "string", example: "Script Writer" },
             contract_id: { type: "integer", example: 1 },
             contract_name: { type: "string", example: "Campaign Ramadan 2025" },
             title: { type: "string", example: "Buat script konten reels" },
@@ -464,132 +510,39 @@ superadmin → owner → content_lead → content_editor / script_writer / admin
               type: "string",
               example: "Script untuk 5 video reels",
             },
-            start_date: {
-              type: "string",
-              format: "date",
-              example: "2025-03-01",
-            },
-            due_date: { type: "string", format: "date", example: "2025-03-10" },
+            deadline: { type: "string", format: "date", example: "2025-03-10" },
             status: { $ref: "#/components/schemas/TaskStatus" },
             created_at: { type: "string", format: "date-time" },
           },
         },
         CreateTaskRequest: {
           type: "object",
-          required: ["content_id", "pillar_id", "title"],
+          required: ["content_id", "assigned_to", "title"],
           properties: {
             content_id: { type: "integer", example: 1 },
-            pillar_id: { type: "integer", example: 1 },
+            assigned_to: { type: "integer", example: 5 },
             title: { type: "string", example: "Buat script konten reels" },
             description: {
               type: "string",
               example: "Script untuk 5 video reels",
             },
-            start_date: {
-              type: "string",
-              format: "date",
-              example: "2025-03-01",
-            },
-            due_date: { type: "string", format: "date", example: "2025-03-10" },
+            deadline: { type: "string", format: "date", example: "2025-03-10" },
           },
         },
         UpdateTaskRequest: {
           type: "object",
-          description:
-            "Update task (field yang dikirim akan diupdate, field yang tidak dikirim tetap). Minimal harus ada 1 field yang diupdate.",
           properties: {
             title: {
               type: "string",
               example: "Buat 10 script reels edukasi - Extended",
             },
-            description: {
-              type: "string",
-              example:
-                "Script untuk 10 video reels tentang tips produktif dengan durasi 30-60 detik",
-            },
-            pillar_id: { type: "integer", example: 1 },
-            start_date: {
-              type: "string",
-              format: "date",
-              example: "2025-03-01",
-            },
-            due_date: {
-              type: "string",
-              format: "date",
-              example: "2025-03-15",
-            },
+            description: { type: "string" },
+            deadline: { type: "string", format: "date", example: "2025-03-15" },
+            assigned_to: { type: "integer", example: 4 },
             status: {
               $ref: "#/components/schemas/TaskStatus",
-              example: "in_progress",
+              example: "on_progress",
             },
-          },
-          example: {
-            status: "in_progress",
-            due_date: "2025-03-15",
-          },
-        },
-
-        // ─ Task Assignment ─────────────────────────────────────────
-        TaskAssignment: {
-          type: "object",
-          properties: {
-            id: { type: "integer", example: 1 },
-            task_id: { type: "integer", example: 1 },
-            task_title: { type: "string", example: "Buat script konten reels" },
-            assigned_to: { type: "integer", example: 5 },
-            assigned_to_name: { type: "string", example: "Andi Scriptwriter" },
-            assignment_role: { $ref: "#/components/schemas/AssignmentRole" },
-            status: { $ref: "#/components/schemas/TaskStatus" },
-            script_text: {
-              type: "string",
-              example: "Halo semuanya! Kali ini kita akan...",
-              nullable: true,
-            },
-            file_url: {
-              type: "string",
-              example: "https://drive.google.com/file/d/abc123",
-              nullable: true,
-            },
-            notes_from_admin: {
-              type: "string",
-              example: "Perhatikan tone yang lebih casual",
-              nullable: true,
-            },
-            created_at: { type: "string", format: "date-time" },
-          },
-        },
-        CreateTaskAssignmentRequest: {
-          type: "object",
-          required: ["task_id", "assigned_to", "assignment_role"],
-          properties: {
-            task_id: { type: "integer", example: 1 },
-            assigned_to: { type: "integer", example: 5 },
-            assignment_role: { $ref: "#/components/schemas/AssignmentRole" },
-            script_text: {
-              type: "string",
-              example: "Halo semuanya! Kali ini kita akan...",
-            },
-            file_url: {
-              type: "string",
-              example: "https://drive.google.com/file/d/abc123",
-            },
-            notes_from_admin: {
-              type: "string",
-              example: "Perhatikan tone yang lebih casual",
-            },
-          },
-        },
-        UpdateTaskAssignmentRequest: {
-          type: "object",
-          description:
-            "Update penugasan task (field yang dikirim akan diupdate, field yang tidak dikirim tetap)",
-          properties: {
-            status: { $ref: "#/components/schemas/TaskStatus" },
-            assignment_role: { $ref: "#/components/schemas/AssignmentRole" },
-            assigned_to: { type: "integer", example: 6 },
-          },
-          example: {
-            status: "in_progress",
           },
         },
 
@@ -600,14 +553,17 @@ superadmin → owner → content_lead → content_editor / script_writer / admin
             id: { type: "integer", example: 1 },
             contract_id: { type: "integer", example: 1 },
             contract_name: { type: "string", example: "Campaign Ramadan 2025" },
-            content_type_id: { type: "integer", example: 2 },
-            type_name: { type: "string", example: "Reels" },
-            platforms: { type: "array", items: { type: "object" } },
+            platform_id: { type: "integer", example: 1 },
+            platform_name: { type: "string", example: "Instagram" },
+            content_category_id: { type: "integer", example: 2 },
+            category_name: { type: "string", example: "Reels" },
+            pillar_id: { type: "integer", example: 1 },
+            pillar_name: { type: "string", example: "Brand Awareness" },
             title: {
               type: "string",
               example: "Tips Produktif di Bulan Ramadan",
             },
-            file_url: {
+            content_url: {
               type: "string",
               example: "https://drive.google.com/...",
               nullable: true,
@@ -617,45 +573,65 @@ superadmin → owner → content_lead → content_editor / script_writer / admin
               example: "Deskripsi konten untuk sosmed",
               nullable: true,
             },
-            publish_date: {
+            objective: {
               type: "string",
-              format: "date-time",
+              example: "Meningkatkan engagement Instagram",
               nullable: true,
             },
+            target_audience: {
+              type: "string",
+              example: "Usia 18-35, pekerja kantoran",
+              nullable: true,
+            },
+            due_date: {
+              type: "string",
+              format: "date",
+              nullable: true,
+            },
+            priority: { $ref: "#/components/schemas/ContentPriority" },
+            status: { $ref: "#/components/schemas/ContentStatus" },
             published_at: {
               type: "string",
               format: "date-time",
               nullable: true,
             },
-            status: { $ref: "#/components/schemas/ContentStatus" },
             created_at: { type: "string", format: "date-time" },
           },
         },
         CreateContentRequest: {
           type: "object",
-          required: ["contract_id", "content_type_id", "title"],
+          required: [
+            "contract_id",
+            "platform_id",
+            "content_category_id",
+            "pillar_id",
+            "title",
+          ],
           properties: {
             contract_id: { type: "integer", example: 1 },
-            content_type_id: { type: "integer", example: 2 },
-            platform_ids: {
-              type: "array",
-              items: { type: "integer" },
-              example: [1, 2],
-            },
+            platform_id: { type: "integer", example: 1 },
+            content_category_id: { type: "integer", example: 2 },
+            pillar_id: { type: "integer", example: 1 },
             title: {
               type: "string",
               example: "Tips Produktif di Bulan Ramadan",
             },
-            file_url: {
+            content_url: {
               type: "string",
               example: "https://drive.google.com/...",
             },
             description: { type: "string", example: "Deskripsi konten" },
-            publish_date: {
+            objective: {
               type: "string",
-              format: "date-time",
-              example: "2025-03-15T09:00:00Z",
+              example: "Meningkatkan engagement Instagram",
             },
+            target_audience: { type: "string", example: "Usia 18-35" },
+            due_date: {
+              type: "string",
+              format: "date",
+              example: "2025-03-15",
+            },
+            priority: { $ref: "#/components/schemas/ContentPriority" },
           },
         },
         UpdateContentRequest: {
@@ -667,9 +643,10 @@ superadmin → owner → content_lead → content_editor / script_writer / admin
               type: "string",
               example: "Tips Produktif di Bulan Ramadan - Edisi Lengkap",
             },
-            content_type_id: { type: "integer", example: 2 },
-            platform_ids: { type: "array", items: { type: "integer" } },
-            file_url: {
+            platform_id: { type: "integer", example: 1 },
+            content_category_id: { type: "integer", example: 2 },
+            pillar_id: { type: "integer", example: 1 },
+            content_url: {
               type: "string",
               example: "https://drive.google.com/file/d/1ramadan-tips-final",
             },
@@ -678,11 +655,17 @@ superadmin → owner → content_lead → content_editor / script_writer / admin
               example:
                 "Tingkatkan produktivitas Anda dengan tips-tips praktis selama Ramadan! 💪 #Ramadan2025",
             },
-            publish_date: {
+            objective: {
               type: "string",
-              format: "date-time",
-              example: "2025-03-08T10:00:00Z",
+              example: "Meningkatkan engagement Instagram",
             },
+            target_audience: { type: "string", example: "Usia 18-35" },
+            due_date: {
+              type: "string",
+              format: "date",
+              example: "2025-03-08",
+            },
+            priority: { $ref: "#/components/schemas/ContentPriority" },
             status: {
               $ref: "#/components/schemas/ContentStatus",
               example: "approved",
@@ -699,26 +682,100 @@ superadmin → owner → content_lead → content_editor / script_writer / admin
           type: "object",
           properties: {
             id: { type: "integer", example: 1 },
-            task_assignment_id: { type: "integer", example: 1 },
+            content_id: { type: "integer", example: 1 },
+            content_title: {
+              type: "string",
+              example: "Tips Produktif di Bulan Ramadan",
+            },
             reviewer_id: { type: "integer", example: 3 },
             reviewer_name: { type: "string", example: "Content Lead" },
             feedback: {
               type: "string",
               example: "Revisi bagian intro agar lebih menarik",
             },
-            status: { $ref: "#/components/schemas/ReviewStatus" },
             reviewed_at: { type: "string", format: "date-time" },
+            created_at: { type: "string", format: "date-time" },
           },
         },
         CreateReviewRequest: {
           type: "object",
-          required: ["feedback", "status"],
+          required: ["content_id", "feedback"],
           properties: {
+            content_id: { type: "integer", example: 1 },
             feedback: {
               type: "string",
               example: "Revisi bagian intro agar lebih menarik",
             },
-            status: { $ref: "#/components/schemas/ReviewStatus" },
+          },
+        },
+
+        // ─ Task Output ────────────────────────────────────────────
+        TaskOutput: {
+          type: "object",
+          properties: {
+            id: { type: "integer", example: 1 },
+            task_id: { type: "integer", example: 1 },
+            task_title: { type: "string", example: "Buat script konten reels" },
+            caption: {
+              type: "string",
+              example: "Caption untuk Instagram Reels #Ramadan2025",
+            },
+            hashtag: {
+              type: "string",
+              example: "#Ramadan2025 #Produktif",
+              nullable: true,
+            },
+            file_url: {
+              type: "string",
+              example: "https://drive.google.com/...",
+              nullable: true,
+            },
+            version: { type: "integer", example: 2 },
+            created_at: { type: "string", format: "date-time" },
+          },
+        },
+        CreateTaskOutputRequest: {
+          type: "object",
+          required: ["task_id", "caption"],
+          properties: {
+            task_id: { type: "integer", example: 1 },
+            caption: {
+              type: "string",
+              example: "Caption untuk Instagram Reels #Ramadan2025",
+            },
+            hashtag: { type: "string", example: "#Ramadan2025 #Produktif" },
+            file_url: {
+              type: "string",
+              example: "https://drive.google.com/...",
+            },
+          },
+        },
+
+        // ─ Task Comment ───────────────────────────────────────────
+        TaskComment: {
+          type: "object",
+          properties: {
+            id: { type: "integer", example: 1 },
+            task_id: { type: "integer", example: 1 },
+            task_title: { type: "string", example: "Buat script konten reels" },
+            user_id: { type: "integer", example: 5 },
+            user_name: { type: "string", example: "Script Writer" },
+            message: {
+              type: "string",
+              example: "Mohon dikirim scriptnya hari ini ya",
+            },
+            created_at: { type: "string", format: "date-time" },
+          },
+        },
+        CreateTaskCommentRequest: {
+          type: "object",
+          required: ["task_id", "message"],
+          properties: {
+            task_id: { type: "integer", example: 1 },
+            message: {
+              type: "string",
+              example: "Mohon dikirim scriptnya hari ini ya",
+            },
           },
         },
 
@@ -730,6 +787,8 @@ superadmin → owner → content_lead → content_editor / script_writer / admin
             content_id: { type: "integer", example: 1 },
             likes: { type: "integer", example: 250 },
             views: { type: "integer", example: 5000 },
+            comments: { type: "integer", example: 45 },
+            shares: { type: "integer", example: 12 },
             recorded_at: { type: "string", format: "date-time" },
           },
         },
@@ -739,6 +798,8 @@ superadmin → owner → content_lead → content_editor / script_writer / admin
             content_id: { type: "integer", example: 1 },
             total_likes: { type: "string", example: "1250" },
             total_views: { type: "string", example: "25000" },
+            total_comments: { type: "string", example: "120" },
+            total_shares: { type: "string", example: "45" },
             total_records: { type: "string", example: "5" },
             first_recorded: { type: "string", format: "date-time" },
             last_recorded: { type: "string", format: "date-time" },
@@ -751,6 +812,8 @@ superadmin → owner → content_lead → content_editor / script_writer / admin
             content_id: { type: "integer", example: 1 },
             likes: { type: "integer", minimum: 0, example: 250 },
             views: { type: "integer", minimum: 0, example: 5000 },
+            comments: { type: "integer", minimum: 0, example: 45 },
+            shares: { type: "integer", minimum: 0, example: 12 },
           },
         },
         TopContent: {
@@ -782,7 +845,7 @@ superadmin → owner → content_lead → content_editor / script_writer / admin
               type: "string",
               example: "Tips Produktif di Bulan Ramadan",
             },
-            file_url: {
+            content_url: {
               type: "string",
               example: "https://drive.google.com/...",
             },
@@ -790,7 +853,7 @@ superadmin → owner → content_lead → content_editor / script_writer / admin
             published_at: { type: "string", format: "date-time" },
             status: { $ref: "#/components/schemas/ContentStatus" },
             contract_name: { type: "string", example: "Campaign Ramadan 2025" },
-            type_name: { type: "string", example: "Reels" },
+            category_name: { type: "string", example: "Reels" },
           },
         },
         CreatePortfolioRequest: {
@@ -813,6 +876,202 @@ superadmin → owner → content_lead → content_editor / script_writer / admin
           example: {
             is_featured: true,
             display_order: 1,
+          },
+        },
+
+        // ─ Activity Log ──────────────────────────────────────────
+        ActivityLog: {
+          type: "object",
+          properties: {
+            id: { type: "integer", example: 1 },
+            user_id: { type: "integer", example: 3, nullable: true },
+            user_name: {
+              type: "string",
+              example: "Diego Santos",
+              nullable: true,
+            },
+            action: {
+              type: "string",
+              enum: [
+                "CREATE",
+                "UPDATE",
+                "DELETE",
+                "PUBLISH",
+                "LOGIN",
+                "LOGOUT",
+              ],
+              example: "UPDATE",
+            },
+            table_name: {
+              type: "string",
+              example: "core.contents",
+              nullable: true,
+            },
+            record_id: { type: "integer", example: 5, nullable: true },
+            old_values: {
+              type: "string",
+              example: '{"status":"draft"}',
+              nullable: true,
+            },
+            new_values: {
+              type: "string",
+              example: '{"status":"published"}',
+              nullable: true,
+            },
+            ip_address: {
+              type: "string",
+              example: "192.168.1.1",
+              nullable: true,
+            },
+            user_agent: {
+              type: "string",
+              example: "Mozilla/5.0...",
+              nullable: true,
+            },
+            created_at: { type: "string", format: "date-time" },
+          },
+        },
+
+        // ─ Notification ──────────────────────────────────────────
+        Notification: {
+          type: "object",
+          properties: {
+            id: { type: "integer", example: 1 },
+            recipient_id: { type: "integer", example: 3 },
+            sender_id: { type: "integer", example: 1, nullable: true },
+            sender_name: { type: "string", example: "Admin", nullable: true },
+            title: { type: "string", example: "Task Baru Diberikan" },
+            message: {
+              type: "string",
+              example:
+                "Anda mendapatkan task 'Review Konten Ramadan' dari Content Lead",
+            },
+            source_type: {
+              type: "string",
+              example: "task",
+              description: "Tipe sumber: task, review, content, assignment",
+            },
+            source_id: { type: "integer", example: 5 },
+            is_read: { type: "boolean", example: false },
+            read_at: { type: "string", format: "date-time", nullable: true },
+            created_at: { type: "string", format: "date-time" },
+          },
+        },
+
+        // ─ Dashboard ──────────────────────────────────────────────
+        DashboardRoleBreakdownItem: {
+          type: "object",
+          properties: {
+            role: { type: "string", example: "content_lead" },
+            count: { type: "integer", example: 4 },
+          },
+        },
+        DashboardSummary: {
+          type: "object",
+          description: "Superadmin summary",
+          properties: {
+            users: {
+              type: "object",
+              properties: {
+                total: { type: "integer", example: 32 },
+                online: { type: "integer", example: 24 },
+              },
+            },
+            roles: {
+              type: "object",
+              properties: {
+                total: { type: "integer", example: 5 },
+                breakdown: {
+                  type: "array",
+                  items: { $ref: "#/components/schemas/DashboardRoleBreakdownItem" },
+                },
+              },
+            },
+            sessions: {
+              type: "object",
+              properties: {
+                active: { type: "integer", example: 12 },
+              },
+            },
+          },
+        },
+        DashboardOwnerSummary: {
+          type: "object",
+          properties: {
+            contracts: {
+              type: "object",
+              properties: {
+                active: { type: "integer", example: 5 },
+                total_revenue: { type: "number", example: 150000000 },
+                by_status: {
+                  type: "object",
+                  properties: {
+                    active: { type: "integer", example: 5 },
+                    completed: { type: "integer", example: 3 },
+                    overdue: { type: "integer", example: 1 },
+                  },
+                },
+              },
+            },
+            users: {
+              type: "object",
+              properties: {
+                total: { type: "integer", example: 20 },
+              },
+            },
+            contents: {
+              type: "object",
+              properties: {
+                published: { type: "integer", example: 45 },
+              },
+            },
+            clients: {
+              type: "object",
+              properties: {
+                total: { type: "integer", example: 10 },
+              },
+            },
+          },
+        },
+        DashboardContentLeadSummary: {
+          type: "object",
+          properties: {
+            contracts: {
+              type: "object",
+              properties: {
+                active: { type: "integer", example: 5 },
+              },
+            },
+            contents: {
+              type: "object",
+              properties: {
+                total: { type: "integer", example: 48 },
+                on_progress: { type: "integer", example: 12 },
+                published: { type: "integer", example: 20 },
+              },
+            },
+          },
+        },
+        DashboardStorage: {
+          type: "object",
+          properties: {
+            used_mb: { type: "number", example: 450 },
+            limit_mb: { type: "integer", example: 2048 },
+            used_percent: { type: "number", example: 22.0 },
+          },
+        },
+        DashboardSystem: {
+          type: "object",
+          properties: {
+            uptime_seconds: { type: "integer", example: 86400 },
+            storage: { $ref: "#/components/schemas/DashboardStorage" },
+            sessions: {
+              type: "object",
+              properties: {
+                active: { type: "integer", example: 12 },
+                online_users: { type: "integer", example: 24 },
+              },
+            },
           },
         },
       },
@@ -900,13 +1159,17 @@ superadmin → owner → content_lead → content_editor / script_writer / admin
       { name: "Contracts", description: "Manajemen kontrak klien" },
       { name: "Contents", description: "Manajemen konten & workflow review" },
       { name: "Platforms", description: "Manajemen platform sosial media" },
-      { name: "Content Types", description: "Manajemen jenis konten" },
+      { name: "Content Categories", description: "Manajemen kategori konten" },
       { name: "Pillars", description: "Manajemen content pillar" },
       { name: "Tasks", description: "Manajemen task per konten" },
-      { name: "Task Assignments", description: "Penugasan tim per task" },
+      { name: "Task Outputs", description: "Output/hasil pengerjaan task" },
+      { name: "Task Comments", description: "Komentar & diskusi per task" },
       { name: "Reviews", description: "Review & approval konten" },
       { name: "Analytics", description: "Data engagement & performa konten" },
       { name: "Portfolio", description: "Manajemen portfolio publik" },
+      { name: "Activity Logs", description: "Log aktivitas & audit trail" },
+      { name: "Notifications", description: "Notifikasi & pemberitahuan user" },
+      { name: "Dashboard", description: "Metric & widget dashboard per role" },
     ],
   },
 
