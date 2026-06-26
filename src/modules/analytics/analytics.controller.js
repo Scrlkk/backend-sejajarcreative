@@ -32,3 +32,11 @@ export const getTopContents = async (req, res, next) => {
     next(e);
   }
 };
+
+export const deleteByContent = async (req, res, next) => {
+  try {
+    success(res, await service.deleteByContent(+req.params.contentId), "Data engagement berhasil dihapus");
+  } catch (e) {
+    next(e);
+  }
+};

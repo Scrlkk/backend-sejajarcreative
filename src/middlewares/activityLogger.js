@@ -88,19 +88,61 @@ const activityLogger = (req, res, next) => {
     const tableName = extractTableName(req.originalUrl);
     const recordId = extractRecordId(req.originalUrl);
 
-    let newValues = null;
-    if (["POST", "PUT", "PATCH"].includes(req.method) && req.body) {
-      const safeBody = { ...req.body };
-      delete safeBody.password;
-      delete safeBody.refresh_token;
-      if (Object.keys(safeBody).length > 0) {
-        newValues = JSON.stringify(safeBody);
-      }
+    // Filter out noisy logs: only log CREATE, UPDATE, and DELETE actions on core system tables
+    const ALLOWED_TABLES = [
+      "core.users",
+      "core.contracts",
+      "core.clients",
+      "core.tasks",
+    ];
+    const ALLOWED_ACTIONS = ["CREATE", "UPDATE", "DELETE"];
+
+    if (!ALLOWED_TABLES.includes(tableName) || !ALLOWED_ACTIONS.includes(action)) {
+      return originalJson(body);
     }
 
-    // Fire-and-forget: insert asynchronously, don't block the response
-    pool
-      .query(
+    // Fetch entity name and insert log asynchronously
+    const logActivity = async () => {
+      let entityName = null;
+      if (recordId) {
+        const tableQueries = {
+          "core.users": { table: "core.users", field: "full_name" },
+          "core.contracts": { table: "core.contracts", field: "contract_name" },
+          "core.clients": { table: "core.clients", field: "client_name" },
+          "core.tasks": { table: "core.tasks", field: "title" }
+        };
+        const config = tableQueries[tableName];
+        if (config) {
+          try {
+            const { rows } = await pool.query(
+              `SELECT ${config.field} AS name FROM ${config.table} WHERE id = $1`,
+              [recordId]
+            );
+            entityName = rows[0]?.name || null;
+          } catch (err) {
+            logger.error(`[ActivityLogger] Failed to fetch entity name for ${tableName}:${recordId}`, err);
+          }
+        }
+      }
+
+      let parsedNewValues = null;
+      if (["POST", "PUT", "PATCH"].includes(req.method) && req.body) {
+        const safeBody = { ...req.body };
+        delete safeBody.password;
+        delete safeBody.refresh_token;
+        if (entityName) {
+          const nameKey = tableName === "core.tasks" || tableName === "core.contracts" ? "title" : "name";
+          safeBody[nameKey] = entityName;
+        }
+        if (Object.keys(safeBody).length > 0) {
+          parsedNewValues = JSON.stringify(safeBody);
+        }
+      } else if (action === "DELETE" && entityName) {
+        const nameKey = tableName === "core.tasks" || tableName === "core.contracts" ? "title" : "name";
+        parsedNewValues = JSON.stringify({ [nameKey]: entityName });
+      }
+
+      await pool.query(
         `INSERT INTO audit.activity_logs
          (user_id, action, table_name, record_id, new_values, ip_address, user_agent)
          VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id`,
@@ -109,20 +151,22 @@ const activityLogger = (req, res, next) => {
           action,
           tableName,
           recordId,
-          newValues,
+          parsedNewValues,
           req.ip,
           req.get("user-agent") || null,
-        ],
-      )
-      .catch((err) => {
-        logger.error("[ActivityLogger] Failed to insert activity log", {
-          error: err.message,
-          code: err.code,
-          path: req.originalUrl,
-          method: req.method,
-          userId: req.user?.id,
-        });
+        ]
+      );
+    };
+
+    logActivity().catch((err) => {
+      logger.error("[ActivityLogger] Failed to insert activity log", {
+        error: err.message,
+        code: err.code,
+        path: req.originalUrl,
+        method: req.method,
+        userId: req.user?.id,
       });
+    });
 
     // Always call the original json method
     return originalJson(body);

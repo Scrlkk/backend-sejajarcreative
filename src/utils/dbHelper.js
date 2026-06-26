@@ -18,7 +18,9 @@ export const ALLOWED_UPDATE_FIELDS = {
     "company_name",
     "contact_email",
     "contact_phone",
-    "is_active",
+    // is_active SENGAJA TIDAK ADA — ubah status aktif hanya lewat
+    // endpoint restore (SET is_active=true, deleted_at=NULL)
+    // atau delete (SET is_active=false, deleted_at=now())
   ],
   "core.contents": [
     "title",
@@ -33,6 +35,8 @@ export const ALLOWED_UPDATE_FIELDS = {
     "due_date",
     "priority",
     "published_at",
+    "format",
+    "scheduled_at",
   ],
   "core.content_reviews": ["notes", "status"],
   "core.task_outputs": ["caption", "hashtag", "file_url"],
@@ -60,7 +64,7 @@ export const buildUpdateQuery = (table, id, fields) => {
   const set = keys.map((k, i) => `${k} = $${i + 1}`).join(", ");
 
   return {
-    sql: `UPDATE ${table} SET ${set} WHERE id = $${keys.length + 1} RETURNING *`,
+    sql: `UPDATE ${table} SET ${set}, updated_at = now() WHERE id = $${keys.length + 1} RETURNING *`,
     params: [...values, id],
   };
 };

@@ -5,7 +5,7 @@ CREATE INDEX IF NOT EXISTS idx_contracts_client_active
   ON core.contracts (client_id, status) WHERE deleted_at IS NULL;
 
 CREATE INDEX IF NOT EXISTS idx_tasks_deadline_pending
-  ON core.tasks (deadline, status) WHERE status NOT IN ('published','approved') AND deleted_at IS NULL;
+  ON core.tasks (deadline, status) WHERE status NOT IN ('approved') AND deleted_at IS NULL;
 
 CREATE INDEX IF NOT EXISTS idx_tasks_assigned_active
   ON core.tasks (assigned_to, status) WHERE deleted_at IS NULL;

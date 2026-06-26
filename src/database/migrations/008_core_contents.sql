@@ -14,6 +14,7 @@ DO $$ BEGIN
     'review',
     'revision',
     'approved',
+    'scheduled',
     'published',
     'overdue'
   );
@@ -24,7 +25,6 @@ CREATE TABLE IF NOT EXISTS core.contents (
   contract_id         INT NOT NULL,
   platform_id         INT NOT NULL,
   content_category_id INT NOT NULL,
-  pillar_id           INT NOT NULL,
   title               VARCHAR(255) NOT NULL,
   content_url         VARCHAR(500),
   objective           VARCHAR(500),
@@ -32,6 +32,8 @@ CREATE TABLE IF NOT EXISTS core.contents (
   description         TEXT,
   due_date            TIMESTAMP,
   published_at        TIMESTAMP,
+  scheduled_at        TIMESTAMP,
+  format              VARCHAR(50) DEFAULT 'Video',
   priority            core.content_priority DEFAULT 'medium',
   status              core.content_status DEFAULT 'draft',
   is_active           BOOLEAN NOT NULL DEFAULT true,
@@ -44,9 +46,7 @@ CREATE TABLE IF NOT EXISTS core.contents (
   CONSTRAINT fk_contents_platform
     FOREIGN KEY (platform_id) REFERENCES core.platforms (id),
   CONSTRAINT fk_contents_category
-    FOREIGN KEY (content_category_id) REFERENCES core.content_category (id),
-  CONSTRAINT fk_contents_pillar
-    FOREIGN KEY (pillar_id) REFERENCES core.pillars (id)
+    FOREIGN KEY (content_category_id) REFERENCES core.content_category (id)
 );
 
 CREATE INDEX IF NOT EXISTS idx_contents_contract_status

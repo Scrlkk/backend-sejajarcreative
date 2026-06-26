@@ -2,11 +2,11 @@
 
 INSERT INTO core.users (full_name, email, password) VALUES
   ('Super Admin', 'superadmin@sejajar.id', '$2b$10$A5wU1yoYCwDHMomBu2ftEeGgHhCToCDqjbg.5HbToEnjGqSi7Uc7K'),
-  ('Owner Sejajar', 'owner@sejajar.id', '$2b$10$A5wU1yoYCwDHMomBu2ftEeGgHhCToCDqjbg.5HbToEnjGqSi7Uc7K'),
-  ('Content Lead', 'contentlead@sejajar.id', '$2b$10$A5wU1yoYCwDHMomBu2ftEeGgHhCToCDqjbg.5HbToEnjGqSi7Uc7K'),
-  ('Content Editor', 'editor@sejajar.id', '$2b$10$A5wU1yoYCwDHMomBu2ftEeGgHhCToCDqjbg.5HbToEnjGqSi7Uc7K'),
-  ('Script Writer', 'writer@sejajar.id', '$2b$10$A5wU1yoYCwDHMomBu2ftEeGgHhCToCDqjbg.5HbToEnjGqSi7Uc7K'),
-  ('Admin Sosmed', 'sosmed@sejajar.id', '$2b$10$A5wU1yoYCwDHMomBu2ftEeGgHhCToCDqjbg.5HbToEnjGqSi7Uc7K')
+  ('Mr. Cheng', 'owner@sejajar.id', '$2b$10$A5wU1yoYCwDHMomBu2ftEeGgHhCToCDqjbg.5HbToEnjGqSi7Uc7K'),
+  ('John Doe', 'contentlead@sejajar.id', '$2b$10$A5wU1yoYCwDHMomBu2ftEeGgHhCToCDqjbg.5HbToEnjGqSi7Uc7K'),
+  ('Jane Smith', 'editor@sejajar.id', '$2b$10$A5wU1yoYCwDHMomBu2ftEeGgHhCToCDqjbg.5HbToEnjGqSi7Uc7K'),
+  ('Michael Johnson', 'writer@sejajar.id', '$2b$10$A5wU1yoYCwDHMomBu2ftEeGgHhCToCDqjbg.5HbToEnjGqSi7Uc7K'),
+  ('Emily Davis', 'sosmed@sejajar.id', '$2b$10$A5wU1yoYCwDHMomBu2ftEeGgHhCToCDqjbg.5HbToEnjGqSi7Uc7K')
 ON CONFLICT (email) DO NOTHING;
 
 INSERT INTO core.user_roles (user_id, role_id)
@@ -22,3 +22,10 @@ JOIN (VALUES
 ) AS v(email, role_name) ON u.email = v.email
 JOIN core.roles r ON r.role_name = v.role_name
 ON CONFLICT (user_id, role_id) DO NOTHING;
+
+-- Seed sample client
+INSERT INTO core.clients (client_name, company_name, contact_email, contact_phone)
+SELECT 'Budi Santoso', 'FreshBrew Coffee', 'budi@freshbrew.com', '08123456789'
+WHERE NOT EXISTS (
+  SELECT 1 FROM core.clients WHERE company_name = 'FreshBrew Coffee'
+);

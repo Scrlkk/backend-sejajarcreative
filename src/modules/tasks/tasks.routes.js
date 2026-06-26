@@ -4,6 +4,8 @@ import { createRules, updateRules } from "./tasks.validation.js";
 import authenticate from "../../middlewares/authenticate.js";
 import authorize from "../../middlewares/authorize.js";
 import validate from "../../middlewares/validate.js";
+import pool from "../../config/database.js";
+import AppError from "../../utils/AppError.js";
 
 const router = Router();
 router.use(authenticate);
@@ -96,7 +98,14 @@ router.use(authenticate);
 router.get("/", controller.getAll);
 router.post(
   "/",
-  authorize("superadmin", "owner", "content_lead"),
+  authorize(
+    "superadmin",
+    "owner",
+    "content_lead",
+    "content_editor",
+    "script_writer",
+    "admin_social_media",
+  ),
   createRules,
   validate,
   controller.create,
@@ -193,10 +202,73 @@ router.post(
  *       404:
  *         $ref: '#/components/responses/NotFound'
  */
+const authorizeTaskUpdate = async (req, res, next) => {
+  try {
+    const userRoles = req.user.roles?.length
+      ? req.user.roles
+      : req.user.role
+        ? [req.user.role]
+        : [];
+    
+    const isLeadOrAdmin = [
+      "superadmin",
+      "owner",
+      "content_lead",
+      "admin_social_media",
+    ].some((r) => userRoles.includes(r));
+
+    if (isLeadOrAdmin) {
+      return next();
+    }
+
+    const taskId = +req.params.id;
+    const { rows } = await pool.query(
+      `SELECT assigned_to, status FROM core.tasks WHERE id = $1 AND deleted_at IS NULL`,
+      [taskId]
+    );
+
+    if (!rows[0]) {
+      return next(new AppError("Task not found", 404));
+    }
+
+    const task = rows[0];
+
+    if (Number(task.assigned_to) !== Number(req.user.id)) {
+      return next(new AppError("Forbidden: You are not assigned to this task", 403));
+    }
+
+    const bodyKeys = Object.keys(req.body);
+    const nonStatusKeys = bodyKeys.filter((k) => k !== "status");
+
+    if (nonStatusKeys.length > 0) {
+      return next(
+        new AppError(
+          "Forbidden: Staff can only update the status of their assigned tasks",
+          403
+        )
+      );
+    }
+
+    const allowedStaffStatuses = ["to_do", "on_progress", "review"];
+    if (req.body.status && !allowedStaffStatuses.includes(req.body.status)) {
+      return next(
+        new AppError(
+          `Forbidden: Staff cannot change task status to "${req.body.status}"`,
+          403
+        )
+      );
+    }
+
+    next();
+  } catch (err) {
+    next(err);
+  }
+};
+
 router.get("/:id", controller.getById);
 router.put(
   "/:id",
-  authorize("superadmin", "owner", "content_lead"),
+  authorizeTaskUpdate,
   updateRules,
   validate,
   controller.update,
@@ -205,6 +277,11 @@ router.delete(
   "/:id",
   authorize("superadmin", "owner", "content_lead"),
   controller.remove,
+);
+router.post(
+  "/:id/restore",
+  authorize("superadmin", "owner", "content_lead"),
+  controller.restore,
 );
 
 export default router;

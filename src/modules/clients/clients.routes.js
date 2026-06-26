@@ -178,6 +178,7 @@ router.put(
   validate,
   controller.update,
 );
-router.delete("/:id", authorize("superadmin"), controller.remove);
+router.delete("/:id", authorize("superadmin", "owner"), controller.remove);
+router.post("/:id/restore", authorize("superadmin", "owner"), controller.restore);
 
 export default router;

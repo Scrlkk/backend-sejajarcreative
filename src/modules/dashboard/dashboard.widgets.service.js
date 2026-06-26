@@ -7,7 +7,7 @@ import * as phase6Service from "./dashboard.phase6.service.js";
 const WIDGET_ACCESS = {
   "reviews-list": ["content_lead", "superadmin"],
   "upcoming-deadlines": ["script_writer", "content_editor", "admin_social_media", "superadmin"],
-  "recent-comments": ["script_writer", "content_editor", "admin_social_media", "superadmin"],
+  "recent-comments": ["content_lead", "script_writer", "content_editor", "admin_social_media", "superadmin"],
   "pillars_usage": ["script_writer", "superadmin"],
   "latest-tasks": ["content_editor", "superadmin"],
   "tasks-by-status": ["content_editor", "admin_social_media", "superadmin"],
@@ -42,7 +42,7 @@ export const getWidget = async (user, name, query) => {
       );
     case "recent-comments":
       return staffService.getRecentCommentsWidget(
-        role === "superadmin" ? null : user.id,
+        (role === "superadmin" || role === "content_lead") ? null : user.id,
         query
       );
     case "pillars_usage":

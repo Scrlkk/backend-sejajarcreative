@@ -8,11 +8,45 @@ export const record = async ({
   views,
   comments,
   shares,
+  recorded_at,
 }) => {
+  const contentRes = await pool.query(
+    "SELECT status FROM core.contents WHERE id = $1 AND deleted_at IS NULL",
+    [content_id]
+  );
+  const content = contentRes.rows[0];
+  if (!content) throw new AppError("Konten tidak ditemukan", 404);
+  if (content.status !== "published") {
+    throw new AppError("Tidak dapat menambahkan engagement pada konten yang belum dipublikasikan", 400);
+  }
+
+  // Get current totals for this content to validate likes vs views
+  const totalsRes = await pool.query(
+    `SELECT COALESCE(SUM(views), 0)::int AS total_views, COALESCE(SUM(likes), 0)::int AS total_likes
+     FROM analytics.engagements WHERE content_id = $1`,
+    [content_id]
+  );
+  const currentViews = totalsRes.rows[0]?.total_views || 0;
+  const currentLikes = totalsRes.rows[0]?.total_likes || 0;
+
+  const newViews = currentViews + (views ?? 0);
+  const newLikes = currentLikes + (likes ?? 0);
+
+  if (newLikes > newViews) {
+    throw new AppError("Jumlah akumulasi likes tidak boleh melebihi jumlah views", 400);
+  }
+
   const { rows } = await pool.query(
-    `INSERT INTO analytics.engagements (content_id, likes, views, comments, shares)
-     VALUES ($1,$2,$3,$4,$5) RETURNING *`,
-    [content_id, likes ?? 0, views ?? 0, comments ?? 0, shares ?? 0],
+    `INSERT INTO analytics.engagements (content_id, likes, views, comments, shares, recorded_at)
+     VALUES ($1, $2, $3, $4, $5, COALESCE($6, now())) RETURNING *`,
+    [
+      content_id,
+      likes ?? 0,
+      views ?? 0,
+      comments ?? 0,
+      shares ?? 0,
+      recorded_at || null,
+    ],
   );
   return rows[0];
 };
@@ -59,6 +93,9 @@ export const getTopContents = async (query) => {
       c.contract_id,
       co.contract_name,
       c.status,
+      c.platform_id,
+      p.platform_name,
+      MAX(e.recorded_at) AS last_updated,
       COALESCE(SUM(e.views), 0) AS total_views,
       COALESCE(SUM(e.likes), 0) AS total_likes,
       COALESCE(SUM(e.comments), 0) AS total_comments,
@@ -66,7 +103,9 @@ export const getTopContents = async (query) => {
     FROM core.contents c
     LEFT JOIN analytics.engagements e ON e.content_id = c.id
     LEFT JOIN core.contracts co ON co.id = c.contract_id
+    LEFT JOIN core.platforms p ON p.id = c.platform_id
     WHERE c.deleted_at IS NULL AND c.is_active = true
+      AND c.status = 'published'
       AND co.deleted_at IS NULL AND co.is_active = true
   `;
   const params = [];
@@ -75,10 +114,19 @@ export const getTopContents = async (query) => {
     sql += ` AND c.contract_id = $${idx++}`;
     params.push(query.contract_id);
   }
-  sql += ` GROUP BY c.id, c.title, c.contract_id, co.contract_name, c.status
+  sql += ` GROUP BY c.id, c.title, c.contract_id, co.contract_name, c.status, c.platform_id, p.platform_name
            ORDER BY total_views DESC, total_likes DESC
            LIMIT $${idx}`;
   params.push(limit);
   const { rows } = await pool.query(sql, params);
   return rows;
 };
+
+export const deleteByContent = async (contentId) => {
+  const { rows } = await pool.query(
+    "DELETE FROM analytics.engagements WHERE content_id = $1 RETURNING *",
+    [contentId]
+  );
+  return rows;
+};
+

@@ -1,6 +1,46 @@
 import pool from "../../config/database.js";
 import AppError from "../../utils/AppError.js";
 import { paginate } from "../../utils/pagination.js";
+import { updateByIdWithWhitelist } from "../../utils/dbHelper.js";
+import { createNotification } from "../notifications/notifications.service.js";
+
+const selectContractsBase = `
+  SELECT c.*, cl.client_name, cl.company_name,
+         u1.full_name AS created_by_name,
+         u2.full_name AS lead_by_name,
+         COALESCE(
+           (SELECT json_agg(json_build_object('id', pl.id, 'platform_name', pl.platform_name))
+            FROM core.contracts_platforms cp
+            JOIN core.platforms pl ON pl.id = cp.platform_id
+            WHERE cp.contract_id = c.id),
+           '[]'::json
+         ) AS platforms,
+         COALESCE(
+           (SELECT json_agg(json_build_object(
+              'id', u.id,
+              'full_name', u.full_name,
+              'is_online', EXISTS(
+                SELECT 1 FROM auth.refresh_tokens rt
+                WHERE rt.user_id = u.id AND rt.expires_at > NOW()
+              ),
+              'roles', COALESCE(
+                (SELECT json_agg(r.role_name ORDER BY r.role_name)
+                 FROM core.user_roles ur
+                 JOIN core.roles r ON r.id = ur.role_id
+                 WHERE ur.user_id = u.id),
+                '[]'::json
+              )
+            ))
+            FROM core.contract_teams ct
+            JOIN core.users u ON u.id = ct.user_id
+            WHERE ct.contract_id = c.id),
+           '[]'::json
+         ) AS teams
+  FROM core.contracts c
+  JOIN core.clients cl ON cl.id = c.client_id AND cl.deleted_at IS NULL AND cl.is_active = true
+  JOIN core.users u1 ON u1.id = c.created_by
+  JOIN core.users u2 ON u2.id = c.lead_by
+`;
 
 const notDeleted = "c.deleted_at IS NULL AND c.is_active = true";
 
@@ -19,16 +59,31 @@ const syncPlatforms = async (client, contractId, platformIds) => {
 };
 
 const syncTeams = async (client, contractId, userIds) => {
-  if (!Array.isArray(userIds)) return;
+  if (!Array.isArray(userIds)) return { addedUsers: [], removedUsers: [] };
+
+  const { rows: existingRows } = await client.query(
+    "SELECT user_id FROM core.contract_teams WHERE contract_id = $1",
+    [contractId]
+  );
+  const existingUserIds = existingRows.map(row => Number(row.user_id));
+  const newUserIds = userIds.map(Number);
+
+  const addedUsers = newUserIds.filter(uid => !existingUserIds.includes(uid));
+  const removedUsers = existingUserIds.filter(uid => !newUserIds.includes(uid));
+
   await client.query("DELETE FROM core.contract_teams WHERE contract_id = $1", [
     contractId,
   ]);
-  if (!userIds.length) return;
-  const values = userIds.map((uid, i) => `($1, $${i + 2})`).join(", ");
-  await client.query(
-    `INSERT INTO core.contract_teams (contract_id, user_id) VALUES ${values}`,
-    [contractId, ...userIds],
-  );
+
+  if (userIds.length > 0) {
+    const values = userIds.map((uid, i) => `($1, $${i + 2})`).join(", ");
+    await client.query(
+      `INSERT INTO core.contract_teams (contract_id, user_id) VALUES ${values}`,
+      [contractId, ...userIds],
+    );
+  }
+
+  return { addedUsers, removedUsers };
 };
 
 export const getAll = async (query) => {
@@ -38,38 +93,7 @@ export const getAll = async (query) => {
     ? "c.deleted_at IS NOT NULL AND c.is_active = false"
     : "c.deleted_at IS NULL AND c.is_active = true";
 
-  let sql = `SELECT c.*, cl.client_name,
-                    u1.full_name AS created_by_name,
-                    u2.full_name AS lead_by_name,
-                    COALESCE(
-                      (SELECT json_agg(json_build_object('id', pl.id, 'platform_name', pl.platform_name))
-                       FROM core.contracts_platforms cp
-                       JOIN core.platforms pl ON pl.id = cp.platform_id
-                       WHERE cp.contract_id = c.id),
-                      '[]'::json
-                    ) AS platforms,
-                    COALESCE(
-                      (SELECT json_agg(json_build_object(
-                         'id', u.id,
-                         'full_name', u.full_name,
-                         'roles', COALESCE(
-                           (SELECT json_agg(r.role_name ORDER BY r.role_name)
-                            FROM core.user_roles ur
-                            JOIN core.roles r ON r.id = ur.role_id
-                            WHERE ur.user_id = u.id),
-                           '[]'::json
-                         )
-                       ))
-                       FROM core.contract_teams ct
-                       JOIN core.users u ON u.id = ct.user_id
-                       WHERE ct.contract_id = c.id),
-                      '[]'::json
-                    ) AS teams
-             FROM core.contracts c
-             JOIN core.clients cl ON cl.id = c.client_id AND cl.deleted_at IS NULL AND cl.is_active = true
-             JOIN core.users u1 ON u1.id = c.created_by
-             JOIN core.users u2 ON u2.id = c.lead_by
-             WHERE ${contractFilter}`;
+  let sql = selectContractsBase + ` WHERE ${contractFilter}`;
   const params = [];
   let idx = 1;
   if (query.client_id) {
@@ -88,38 +112,7 @@ export const getAll = async (query) => {
 
 export const getById = async (id) => {
   const { rows } = await pool.query(
-    `SELECT c.*, cl.client_name,
-            u1.full_name AS created_by_name,
-            u2.full_name AS lead_by_name,
-            COALESCE(
-              (SELECT json_agg(json_build_object('id', pl.id, 'platform_name', pl.platform_name))
-               FROM core.contracts_platforms cp
-               JOIN core.platforms pl ON pl.id = cp.platform_id
-               WHERE cp.contract_id = c.id),
-              '[]'::json
-            ) AS platforms,
-            COALESCE(
-              (SELECT json_agg(json_build_object(
-                 'id', u.id,
-                 'full_name', u.full_name,
-                 'roles', COALESCE(
-                   (SELECT json_agg(r.role_name ORDER BY r.role_name)
-                    FROM core.user_roles ur
-                    JOIN core.roles r ON r.id = ur.role_id
-                    WHERE ur.user_id = u.id),
-                   '[]'::json
-                 )
-               ))
-               FROM core.contract_teams ct
-               JOIN core.users u ON u.id = ct.user_id
-               WHERE ct.contract_id = c.id),
-              '[]'::json
-            ) AS teams
-     FROM core.contracts c
-     JOIN core.clients cl ON cl.id = c.client_id AND cl.deleted_at IS NULL AND cl.is_active = true
-     JOIN core.users u1 ON u1.id = c.created_by
-     JOIN core.users u2 ON u2.id = c.lead_by
-     WHERE c.id = $1 AND c.deleted_at IS NULL AND c.is_active = true`,
+    `${selectContractsBase} WHERE c.id = $1 AND c.deleted_at IS NULL AND c.is_active = true`,
     [id],
   );
   if (!rows[0]) throw new AppError("Contract not found", 404);
@@ -160,15 +153,55 @@ export const create = async (data, createdBy) => {
       ],
     );
 
+    let syncResult = { addedUsers: [], removedUsers: [] };
     if (platform_ids?.length) {
       await syncPlatforms(client, rows[0].id, platform_ids);
     }
     if (team_user_ids?.length) {
-      await syncTeams(client, rows[0].id, team_user_ids);
+      syncResult = await syncTeams(client, rows[0].id, team_user_ids);
     }
 
     await client.query("COMMIT");
-    return getById(rows[0].id);
+    const contract = await getById(rows[0].id);
+
+    try {
+      await createNotification(null, {
+        recipient_id: lead_by,
+        sender_id: createdBy,
+        title: "Kontrak Baru Ditugaskan",
+        message: `Anda telah ditugaskan sebagai Content Lead untuk kontrak "${contract_name}" (${contract_code}).`,
+        source_type: "contract",
+        source_id: contract.id,
+      });
+
+
+      // Ambil seluruh user dengan role 'owner' yang aktif
+      const ownersRes = await pool.query(
+        `SELECT u.id 
+         FROM core.users u
+         JOIN core.user_roles ur ON ur.user_id = u.id
+         JOIN core.roles r ON r.id = ur.role_id
+         WHERE r.role_name = 'owner' AND u.deleted_at IS NULL AND u.is_active = true`
+      );
+
+      for (const owner of ownersRes.rows) {
+        // Jangan kirim notifikasi ke diri sendiri jika pembuatnya adalah owner tersebut
+        if (Number(owner.id) === Number(createdBy)) continue;
+
+        await createNotification(null, {
+          recipient_id: owner.id,
+          sender_id: createdBy,
+          title: "Kontrak Baru Dibuat",
+          message: `Kontrak "${contract.contract_name}" (${contract.contract_code}) telah dibuat oleh ${contract.created_by_name}.`,
+          source_type: "contract",
+          source_id: contract.id,
+        });
+      }
+    } catch (err) {
+      console.error("Failed to send contract assignment, team, or owner notifications:", err.message);
+    }
+
+    return contract;
   } catch (e) {
     await client.query("ROLLBACK");
     throw e;
@@ -177,7 +210,7 @@ export const create = async (data, createdBy) => {
   }
 };
 
-export const update = async (id, fields) => {
+export const update = async (id, fields, updatedBy) => {
   const { platform_ids, team_user_ids, ...rest } = fields;
   const allowedFields = [
     "contract_name",
@@ -193,6 +226,9 @@ export const update = async (id, fields) => {
 
   const client = await pool.connect();
   try {
+    const existing = await getById(id);
+    const oldLeadBy = existing.lead_by;
+
     await client.query("BEGIN");
 
     if (keys.length) {
@@ -206,11 +242,12 @@ export const update = async (id, fields) => {
       if (!rows[0]) throw new AppError("Contract not found", 404);
     }
 
+    let syncResult = { addedUsers: [], removedUsers: [] };
     if (platform_ids !== undefined) {
       await syncPlatforms(client, id, platform_ids);
     }
     if (team_user_ids !== undefined) {
-      await syncTeams(client, id, team_user_ids);
+      syncResult = await syncTeams(client, id, team_user_ids);
     }
 
     if (
@@ -222,7 +259,25 @@ export const update = async (id, fields) => {
     }
 
     await client.query("COMMIT");
-    return getById(id);
+    const updatedContract = await getById(id);
+
+
+    if (fields.lead_by && Number(fields.lead_by) !== Number(oldLeadBy)) {
+      try {
+        await createNotification(null, {
+          recipient_id: fields.lead_by,
+          sender_id: updatedBy,
+          title: "Penugasan Content Lead",
+          message: `Anda telah ditugaskan sebagai Content Lead baru untuk kontrak "${updatedContract.contract_name}" (${updatedContract.contract_code}).`,
+          source_type: "contract",
+          source_id: id,
+        });
+      } catch (err) {
+        console.error("Failed to send contract lead update notification:", err.message);
+      }
+    }
+
+    return updatedContract;
   } catch (e) {
     await client.query("ROLLBACK");
     throw e;
@@ -231,11 +286,112 @@ export const update = async (id, fields) => {
   }
 };
 
-export const remove = async (id) => {
+export const remove = async (id, deletedBy) => {
+  const contract = await getById(id);
+  if (!contract) throw new AppError("Contract not found", 404);
+
   const { rowCount } = await pool.query(
     `UPDATE core.contracts SET deleted_at = now(), is_active = false, updated_at = now()
      WHERE id = $1 AND deleted_at IS NULL`,
     [id],
   );
   if (!rowCount) throw new AppError("Contract not found", 404);
+
+  try {
+    // 1. Notify Content Leads: "Kontrak Dihapus"
+    const contentLeadsRes = await pool.query(
+      `SELECT ur.user_id
+       FROM core.user_roles ur
+       JOIN core.roles r ON r.id = ur.role_id
+       WHERE r.role_name = 'content_lead'`
+    );
+
+    for (const row of contentLeadsRes.rows) {
+      await createNotification(null, {
+        recipient_id: row.user_id,
+        sender_id: deletedBy || null,
+        title: "Kontrak Dihapus",
+        message: `Kontrak "${contract.title}" telah dihapus.`,
+        source_type: "contract",
+        source_id: id,
+      });
+    }
+
+    // 2. Notify employees whose tasks are under contents of this contract
+    const tasksRes = await pool.query(
+      `SELECT DISTINCT t.id, t.title, t.assigned_to
+       FROM core.tasks t
+       JOIN core.contents c ON c.id = t.content_id
+       WHERE c.contract_id = $1 AND t.deleted_at IS NULL AND t.is_active = true`,
+      [id]
+    );
+
+    for (const task of tasksRes.rows) {
+      await createNotification(null, {
+        recipient_id: task.assigned_to,
+        sender_id: deletedBy || null,
+        title: "Tugas Dibatalkan/Dihapus",
+        message: `Tugas Anda "${task.title}" telah dihapus/dibatalkan dari konten.`,
+        source_type: "task",
+        source_id: task.id,
+      });
+    }
+  } catch (err) {
+    console.error("Failed to send contract deletion notifications:", err.message);
+  }
+};
+
+export const restore = async (id, restoredBy) => {
+  const { rows } = await pool.query(
+    `UPDATE core.contracts SET is_active = true, deleted_at = NULL, updated_at = now()
+     WHERE id = $1 RETURNING id`,
+    [id],
+  );
+  if (!rows[0]) throw new AppError("Contract tidak ditemukan", 404);
+  const contract = await getById(id);
+
+  try {
+    // 1. Notify Content Leads: "Kontrak Diaktifkan Kembali"
+    const contentLeadsRes = await pool.query(
+      `SELECT ur.user_id
+       FROM core.user_roles ur
+       JOIN core.roles r ON r.id = ur.role_id
+       WHERE r.role_name = 'content_lead'`
+    );
+
+    for (const row of contentLeadsRes.rows) {
+      await createNotification(null, {
+        recipient_id: row.user_id,
+        sender_id: restoredBy || null,
+        title: "Kontrak Diaktifkan Kembali",
+        message: `Kontrak "${contract.title}" telah diaktifkan kembali.`,
+        source_type: "contract",
+        source_id: id,
+      });
+    }
+
+    // 2. Notify employees whose tasks are restored
+    const tasksRes = await pool.query(
+      `SELECT DISTINCT t.id, t.title, t.assigned_to
+       FROM core.tasks t
+       JOIN core.contents c ON c.id = t.content_id
+       WHERE c.contract_id = $1 AND t.deleted_at IS NULL AND t.is_active = true`,
+      [id]
+    );
+
+    for (const task of tasksRes.rows) {
+      await createNotification(null, {
+        recipient_id: task.assigned_to,
+        sender_id: restoredBy || null,
+        title: "Tugas Diaktifkan Kembali",
+        message: `Tugas Anda "${task.title}" telah diaktifkan kembali.`,
+        source_type: "task",
+        source_id: task.id,
+      });
+    }
+  } catch (err) {
+    console.error("Failed to send contract restoration notifications:", err.message);
+  }
+
+  return contract;
 };

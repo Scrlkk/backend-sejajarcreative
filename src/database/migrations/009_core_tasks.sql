@@ -5,8 +5,6 @@ DO $$ BEGIN
     'review',
     'revision',
     'approved',
-    'scheduled',
-    'published',
     'overdue'
   );
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;

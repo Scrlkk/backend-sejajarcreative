@@ -49,19 +49,43 @@ export const getCalendarWidget = async (role, userId, query = {}) => {
            t.id,
            t.title,
            t.status,
-           t.deadline,
+           COALESCE(t.deadline, c.due_date) AS deadline,
            c.id AS content_id,
            c.title AS content_title,
            c.due_date,
-           p.platform_name
+           p.platform_name,
+           cc.type_name AS category_name,
+           pil_sub.pillar_name AS pillar_name,
+           COALESCE(
+             (SELECT json_agg(json_build_object(
+                'id', pil_inner.id,
+                'pillar_name', pil_inner.pillar_name,
+                'color_key', pil_inner.color_key
+              ) ORDER BY pil_inner.pillar_name)
+              FROM core.content_pillars cp_inner
+              JOIN core.pillars pil_inner ON pil_inner.id = cp_inner.pillar_id AND pil_inner.is_active = true
+              WHERE cp_inner.content_id = c.id),
+             '[]'::json
+           ) AS pillars,
+           c.format,
+           c.priority
          FROM core.tasks t
          JOIN core.contents c ON c.id = t.content_id
          JOIN core.platforms p ON p.id = c.platform_id
+         JOIN core.content_category cc ON cc.id = c.content_category_id
+         LEFT JOIN LATERAL (
+           SELECT pil.pillar_name FROM core.content_pillars cp
+           JOIN core.pillars pil ON pil.id = cp.pillar_id
+           WHERE cp.content_id = c.id ORDER BY pil.pillar_name LIMIT 1
+         ) pil_sub ON true
+         JOIN core.contracts co ON co.id = c.contract_id
          WHERE t.assigned_to = $1
            AND t.deleted_at IS NULL
-           AND t.deadline >= $2
-           AND t.deadline < $3
-         ORDER BY t.deadline ASC NULLS LAST`,
+           AND c.deleted_at IS NULL AND c.is_active = true
+           AND co.deleted_at IS NULL AND co.is_active = true
+           AND COALESCE(t.deadline, c.due_date) >= $2
+           AND COALESCE(t.deadline, c.due_date) < $3
+         ORDER BY COALESCE(t.deadline, c.due_date) ASC NULLS LAST`,
         [userId, from, to],
       ),
     ]);
@@ -77,18 +101,48 @@ export const getCalendarWidget = async (role, userId, query = {}) => {
            c.title,
            c.status,
            c.due_date,
-           p.platform_name
+           c.scheduled_at,
+           p.platform_name,
+           cc.type_name AS category_name,
+           pil_sub.pillar_name AS pillar_name,
+           COALESCE(
+             (SELECT json_agg(json_build_object(
+                'id', pil_inner.id,
+                'pillar_name', pil_inner.pillar_name,
+                'color_key', pil_inner.color_key
+              ) ORDER BY pil_inner.pillar_name)
+              FROM core.content_pillars cp_inner
+              JOIN core.pillars pil_inner ON pil_inner.id = cp_inner.pillar_id AND pil_inner.is_active = true
+              WHERE cp_inner.content_id = c.id),
+             '[]'::json
+           ) AS pillars,
+           c.format,
+           c.priority
          FROM core.contents c
          JOIN core.platforms p ON p.id = c.platform_id
+         JOIN core.content_category cc ON cc.id = c.content_category_id
+         LEFT JOIN LATERAL (
+           SELECT pil.pillar_name FROM core.content_pillars cp
+           JOIN core.pillars pil ON pil.id = cp.pillar_id
+           WHERE cp.content_id = c.id ORDER BY pil.pillar_name LIMIT 1
+         ) pil_sub ON true
+         JOIN core.contracts co ON co.id = c.contract_id
          WHERE c.id = ANY($1::int[])
-           AND c.deleted_at IS NULL
-           AND c.is_active = true
+           AND c.deleted_at IS NULL AND c.is_active = true
+           AND co.deleted_at IS NULL AND co.is_active = true
          ORDER BY c.due_date ASC NULLS LAST`,
         [contentIds],
       );
     }
 
-    contents = contentsResult.rows;
+    contents = contentsResult.rows.map((r) => ({
+      ...r,
+      pillars: Array.isArray(r.pillars)
+        ? r.pillars
+        : typeof r.pillars === "string"
+          ? JSON.parse(r.pillars)
+          : [],
+    }));
     tasks    = tasksResult.rows.map((r) => ({
       id: r.id,
       title: r.title,
@@ -97,6 +151,15 @@ export const getCalendarWidget = async (role, userId, query = {}) => {
       platform_name: r.platform_name,
       content_id: r.content_id,
       content_title: r.content_title,
+      category_name: r.category_name,
+      pillar_name: r.pillar_name,
+      format: r.format,
+      priority: r.priority,
+      pillars: Array.isArray(r.pillars)
+        ? r.pillars
+        : typeof r.pillars === "string"
+          ? JSON.parse(r.pillars)
+          : [],
     }));
 
   } else {
@@ -108,13 +171,36 @@ export const getCalendarWidget = async (role, userId, query = {}) => {
            c.title,
            c.status,
            c.due_date,
-           p.platform_name
+           c.scheduled_at,
+           p.platform_name,
+           cc.type_name AS category_name,
+           pil_sub.pillar_name AS pillar_name,
+           COALESCE(
+             (SELECT json_agg(json_build_object(
+                'id', pil_inner.id,
+                'pillar_name', pil_inner.pillar_name,
+                'color_key', pil_inner.color_key
+              ) ORDER BY pil_inner.pillar_name)
+              FROM core.content_pillars cp_inner
+              JOIN core.pillars pil_inner ON pil_inner.id = cp_inner.pillar_id AND pil_inner.is_active = true
+              WHERE cp_inner.content_id = c.id),
+             '[]'::json
+           ) AS pillars,
+           c.format,
+           c.priority
          FROM core.contents c
          JOIN core.platforms p ON p.id = c.platform_id
+         JOIN core.content_category cc ON cc.id = c.content_category_id
+         LEFT JOIN LATERAL (
+           SELECT pil.pillar_name FROM core.content_pillars cp
+           JOIN core.pillars pil ON pil.id = cp.pillar_id
+           WHERE cp.content_id = c.id ORDER BY pil.pillar_name LIMIT 1
+         ) pil_sub ON true
+         JOIN core.contracts co ON co.id = c.contract_id
          WHERE c.due_date >= $1
            AND c.due_date < $2
-           AND c.deleted_at IS NULL
-           AND c.is_active = true
+           AND c.deleted_at IS NULL AND c.is_active = true
+           AND co.deleted_at IS NULL AND co.is_active = true
          ORDER BY c.due_date ASC`,
         [from, to],
       ),
@@ -123,24 +209,53 @@ export const getCalendarWidget = async (role, userId, query = {}) => {
            t.id,
            t.title,
            t.status,
-           t.deadline,
+           COALESCE(t.deadline, c.due_date) AS deadline,
            c.id AS content_id,
            c.title AS content_title,
-           p.platform_name
+           p.platform_name,
+           cc.type_name AS category_name,
+           pil_sub.pillar_name AS pillar_name,
+           COALESCE(
+             (SELECT json_agg(json_build_object(
+                'id', pil_inner.id,
+                'pillar_name', pil_inner.pillar_name,
+                'color_key', pil_inner.color_key
+              ) ORDER BY pil_inner.pillar_name)
+              FROM core.content_pillars cp_inner
+              JOIN core.pillars pil_inner ON pil_inner.id = cp_inner.pillar_id AND pil_inner.is_active = true
+              WHERE cp_inner.content_id = c.id),
+             '[]'::json
+           ) AS pillars,
+           c.format,
+           c.priority
          FROM core.tasks t
          JOIN core.contents c ON c.id = t.content_id
          JOIN core.platforms p ON p.id = c.platform_id
-         WHERE t.deadline >= $1
-           AND t.deadline < $2
+         JOIN core.content_category cc ON cc.id = c.content_category_id
+         LEFT JOIN LATERAL (
+           SELECT pil.pillar_name FROM core.content_pillars cp
+           JOIN core.pillars pil ON pil.id = cp.pillar_id
+           WHERE cp.content_id = c.id ORDER BY pil.pillar_name LIMIT 1
+         ) pil_sub ON true
+         JOIN core.contracts co ON co.id = c.contract_id
+         WHERE COALESCE(t.deadline, c.due_date) >= $1
+           AND COALESCE(t.deadline, c.due_date) < $2
            AND t.deleted_at IS NULL
-           AND c.deleted_at IS NULL
-           AND c.is_active = true
-         ORDER BY t.deadline ASC`,
+           AND c.deleted_at IS NULL AND c.is_active = true
+           AND co.deleted_at IS NULL AND co.is_active = true
+         ORDER BY COALESCE(t.deadline, c.due_date) ASC`,
         [from, to],
       ),
     ]);
 
-    contents = contentsResult.rows;
+    contents = contentsResult.rows.map((r) => ({
+      ...r,
+      pillars: Array.isArray(r.pillars)
+        ? r.pillars
+        : typeof r.pillars === "string"
+          ? JSON.parse(r.pillars)
+          : [],
+    }));
     tasks    = tasksResult.rows.map((r) => ({
       id: r.id,
       title: r.title,
@@ -149,6 +264,15 @@ export const getCalendarWidget = async (role, userId, query = {}) => {
       platform_name: r.platform_name,
       content_id: r.content_id,
       content_title: r.content_title,
+      category_name: r.category_name,
+      pillar_name: r.pillar_name,
+      format: r.format,
+      priority: r.priority,
+      pillars: Array.isArray(r.pillars)
+        ? r.pillars
+        : typeof r.pillars === "string"
+          ? JSON.parse(r.pillars)
+          : [],
     }));
   }
 
@@ -175,7 +299,7 @@ export const getSystemLogsSummaryWidget = async () => {
          COUNT(*) FILTER (WHERE action = 'READ')::int AS read_count
        FROM audit.activity_logs`,
     ),
-    Promise.resolve(getStorageUsage()),
+    getStorageUsage(),
     getSessionStats(),
   ]);
 

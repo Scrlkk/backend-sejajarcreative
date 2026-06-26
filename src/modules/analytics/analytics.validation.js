@@ -6,6 +6,7 @@ export const recordRules = [
   body("views").optional().isInt({ min: 0 }),
   body("comments").optional().isInt({ min: 0 }),
   body("shares").optional().isInt({ min: 0 }),
+  body("recorded_at").optional().isISO8601(),
 ];
 
 export const topContentsRules = [

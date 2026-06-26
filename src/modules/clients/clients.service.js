@@ -4,9 +4,21 @@ import { paginate } from "../../utils/pagination.js";
 
 export const getAll = async (query) => {
   const { limit, offset } = paginate(query);
+  const showDeleted = query.status === "deleted";
+  const showAll = query.status === "all" || query.all === "true" || query.all === true;
+
+  let clientFilter;
+  if (showAll) {
+    clientFilter = "1=1";
+  } else if (showDeleted) {
+    clientFilter = "deleted_at IS NOT NULL AND is_active = false";
+  } else {
+    clientFilter = "is_active = true AND deleted_at IS NULL";
+  }
+
   const { rows } = await pool.query(
     `SELECT * FROM core.clients
-     WHERE is_active = true AND deleted_at IS NULL
+     WHERE ${clientFilter}
      ORDER BY id DESC LIMIT $1 OFFSET $2`,
     [limit, offset],
   );
@@ -69,4 +81,15 @@ export const remove = async (id) => {
     [id],
   );
   if (!rowCount) throw new AppError("Client not found", 404);
+};
+
+export const restore = async (id) => {
+  const { rows } = await pool.query(
+    `UPDATE core.clients
+     SET is_active = true, deleted_at = NULL, updated_at = now()
+     WHERE id = $1 RETURNING *`,
+    [id],
+  );
+  if (!rows[0]) throw new AppError("Client tidak ditemukan", 404);
+  return rows[0];
 };

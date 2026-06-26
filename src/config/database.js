@@ -2,6 +2,9 @@ import pg from "pg";
 import env from "./env.js";
 import logger from "./logger.js";
 
+// Parse DATE (OID 1082) as raw string to avoid timezone offset shifts
+pg.types.setTypeParser(1082, (val) => val);
+
 const { Pool } = pg;
 
 const pool = new Pool({

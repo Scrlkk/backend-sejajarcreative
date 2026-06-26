@@ -261,6 +261,7 @@ router.put(
     "content_lead",
     "content_editor",
     "script_writer",
+    "admin_social_media",
   ),
   updateRules,
   validate,
@@ -270,6 +271,11 @@ router.delete(
   "/:id",
   authorize("superadmin", "owner", "content_lead"),
   controller.remove,
+);
+router.post(
+  "/:id/restore",
+  authorize("superadmin", "owner", "content_lead"),
+  controller.restore,
 );
 
 export default router;

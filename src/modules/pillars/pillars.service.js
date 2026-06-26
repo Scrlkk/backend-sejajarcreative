@@ -24,16 +24,16 @@ export const getById = async (id) => {
   return rows[0];
 };
 
-export const create = async ({ pillar_name, description }) => {
+export const create = async ({ pillar_name, description, color_key }) => {
   const { rows } = await pool.query(
-    "INSERT INTO core.pillars (pillar_name, description) VALUES ($1, $2) RETURNING *",
-    [pillar_name, description],
+    "INSERT INTO core.pillars (pillar_name, description, color_key) VALUES ($1, $2, $3) RETURNING *",
+    [pillar_name, description, color_key || null],
   );
   return rows[0];
 };
 
 export const update = async (id, fields) => {
-  const allowedFields = ["pillar_name", "description", "is_active"];
+  const allowedFields = ["pillar_name", "description", "is_active", "color_key"];
   const keys = Object.keys(fields).filter((k) => allowedFields.includes(k));
   if (!keys.length) throw new AppError("Tidak ada field valid untuk diupdate", 422);
 

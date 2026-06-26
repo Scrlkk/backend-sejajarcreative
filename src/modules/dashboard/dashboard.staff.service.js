@@ -3,13 +3,18 @@ import pool from "../../config/database.js";
 export const getStaffSummary = async (userId) => {
   const { rows } = await pool.query(
     `SELECT
-       COUNT(*)::int AS total,
-       COUNT(*) FILTER (WHERE status = 'to_do')::int AS to_do,
-       COUNT(*) FILTER (WHERE status = 'on_progress')::int AS on_progress,
-       COUNT(*) FILTER (WHERE status = 'approved')::int AS approved,
-       COUNT(*) FILTER (WHERE status = 'revision')::int AS revision
-     FROM core.tasks
-     WHERE assigned_to = $1 AND deleted_at IS NULL`,
+       COUNT(t.id)::int AS total,
+       COUNT(t.id) FILTER (WHERE t.status = 'to_do')::int AS to_do,
+       COUNT(t.id) FILTER (WHERE t.status = 'on_progress')::int AS on_progress,
+       COUNT(t.id) FILTER (WHERE t.status = 'approved')::int AS approved,
+       COUNT(t.id) FILTER (WHERE t.status = 'revision')::int AS revision
+     FROM core.tasks t
+     JOIN core.contents c ON c.id = t.content_id
+     JOIN core.contracts co ON co.id = c.contract_id
+     WHERE t.assigned_to = $1
+       AND t.deleted_at IS NULL
+       AND c.deleted_at IS NULL AND c.is_active = true
+       AND co.deleted_at IS NULL AND co.is_active = true`,
     [userId]
   );
 
@@ -37,11 +42,12 @@ export const getUpcomingDeadlinesWidget = async (userId, query = {}) => {
               u.full_name AS assigned_to_name
        FROM core.tasks t
        JOIN core.contents c ON c.id = t.content_id
+       JOIN core.contracts co ON co.id = c.contract_id
        LEFT JOIN core.users u ON u.id = t.assigned_to
        WHERE t.deleted_at IS NULL
-         AND c.deleted_at IS NULL
-         AND c.is_active = true
-         AND t.status NOT IN ('published', 'approved')
+         AND c.deleted_at IS NULL AND c.is_active = true
+         AND co.deleted_at IS NULL AND co.is_active = true
+        AND t.status != 'approved'
          AND t.deadline IS NOT NULL
        ORDER BY t.deadline ASC
        LIMIT $1`,
@@ -54,11 +60,12 @@ export const getUpcomingDeadlinesWidget = async (userId, query = {}) => {
     `SELECT t.id, t.title, t.status, t.deadline, c.title AS content_title
      FROM core.tasks t
      JOIN core.contents c ON c.id = t.content_id
+     JOIN core.contracts co ON co.id = c.contract_id
      WHERE t.assigned_to = $1
        AND t.deleted_at IS NULL
-       AND c.deleted_at IS NULL
-       AND c.is_active = true
-       AND t.status NOT IN ('published', 'approved')
+       AND c.deleted_at IS NULL AND c.is_active = true
+       AND co.deleted_at IS NULL AND co.is_active = true
+       AND t.status != 'approved'
        AND t.deadline IS NOT NULL
      ORDER BY t.deadline ASC
      LIMIT $2`,
@@ -87,10 +94,14 @@ export const getRecentCommentsWidget = async (userId, query = {}) => {
          assignee.full_name AS assigned_to_name
        FROM core.task_comments tc
        JOIN core.tasks t ON t.id = tc.task_id
+       JOIN core.contents c ON c.id = t.content_id
+       JOIN core.contracts co ON co.id = c.contract_id
        LEFT JOIN core.users u ON u.id = tc.user_id
        LEFT JOIN core.users assignee ON assignee.id = t.assigned_to
        WHERE tc.deleted_at IS NULL
          AND t.deleted_at IS NULL
+         AND c.deleted_at IS NULL AND c.is_active = true
+         AND co.deleted_at IS NULL AND co.is_active = true
        ORDER BY tc.created_at DESC
        LIMIT $1`,
       [limit]
@@ -109,10 +120,14 @@ export const getRecentCommentsWidget = async (userId, query = {}) => {
        tc.created_at
      FROM core.task_comments tc
      JOIN core.tasks t ON t.id = tc.task_id
+     JOIN core.contents c ON c.id = t.content_id
+     JOIN core.contracts co ON co.id = c.contract_id
      LEFT JOIN core.users u ON u.id = tc.user_id
      WHERE t.assigned_to = $1
        AND tc.deleted_at IS NULL
        AND t.deleted_at IS NULL
+       AND c.deleted_at IS NULL AND c.is_active = true
+       AND co.deleted_at IS NULL AND co.is_active = true
      ORDER BY tc.created_at DESC
      LIMIT $2`,
     [userId, limit]
@@ -132,9 +147,12 @@ export const getPillarsUsageWidget = async (userId) => {
            p.pillar_name,
            COUNT(DISTINCT c.id)::int AS count
          FROM core.pillars p
-         JOIN core.contents c ON c.pillar_id = p.id AND c.deleted_at IS NULL AND c.is_active = true
+         JOIN core.content_pillars cp ON cp.pillar_id = p.id
+         JOIN core.contents c ON c.id = cp.content_id AND c.deleted_at IS NULL AND c.is_active = true
+         JOIN core.contracts co ON co.id = c.contract_id
          JOIN core.tasks t ON t.content_id = c.id AND t.deleted_at IS NULL
          WHERE p.is_active = true
+           AND co.deleted_at IS NULL AND co.is_active = true
            AND t.assigned_to = $1
          GROUP BY p.id, p.pillar_name
          ORDER BY count DESC, p.pillar_name ASC`,
@@ -146,7 +164,14 @@ export const getPillarsUsageWidget = async (userId) => {
            p.pillar_name,
            COUNT(c.id)::int AS count
          FROM core.pillars p
-         LEFT JOIN core.contents c ON c.pillar_id = p.id AND c.deleted_at IS NULL AND c.is_active = true
+         LEFT JOIN core.content_pillars cp ON cp.pillar_id = p.id
+         LEFT JOIN core.contents c ON c.id = cp.content_id AND c.deleted_at IS NULL AND c.is_active = true
+           AND EXISTS (
+             SELECT 1 FROM core.contracts co
+             WHERE co.id = c.contract_id
+               AND co.deleted_at IS NULL
+               AND co.is_active = true
+           )
          WHERE p.is_active = true
          GROUP BY p.id, p.pillar_name
          ORDER BY count DESC, p.pillar_name ASC`
@@ -181,11 +206,12 @@ export const getLatestTasksWidget = async (userId, query = {}) => {
               u.full_name AS assigned_to_name
        FROM core.tasks t
        JOIN core.contents c ON c.id = t.content_id
+       JOIN core.contracts co ON co.id = c.contract_id
        LEFT JOIN core.users u ON u.id = t.assigned_to
        WHERE t.status IN ('to_do', 'on_progress', 'review', 'revision', 'overdue')
          AND t.deleted_at IS NULL
-         AND c.deleted_at IS NULL
-         AND c.is_active = true
+         AND c.deleted_at IS NULL AND c.is_active = true
+         AND co.deleted_at IS NULL AND co.is_active = true
        ORDER BY t.created_at DESC
        LIMIT $1`,
       [limit]
@@ -197,11 +223,12 @@ export const getLatestTasksWidget = async (userId, query = {}) => {
     `SELECT t.id, t.title, t.status, t.deadline, t.created_at, c.title AS content_title
      FROM core.tasks t
      JOIN core.contents c ON c.id = t.content_id
+     JOIN core.contracts co ON co.id = c.contract_id
      WHERE t.assigned_to = $1
        AND t.status IN ('to_do', 'on_progress', 'review', 'revision', 'overdue')
        AND t.deleted_at IS NULL
-       AND c.deleted_at IS NULL
-       AND c.is_active = true
+       AND c.deleted_at IS NULL AND c.is_active = true
+       AND co.deleted_at IS NULL AND co.is_active = true
      ORDER BY t.created_at DESC
      LIMIT $2`,
     [userId, limit]
@@ -216,19 +243,27 @@ export const getTasksByStatusWidget = async (userId) => {
   // userId = null → superadmin: semua task, tanpa filter assigned_to
   const { rows } = userId !== null
     ? await pool.query(
-        `SELECT status, COUNT(*)::int AS count
-         FROM core.tasks
-         WHERE assigned_to = $1 AND deleted_at IS NULL
-         GROUP BY status
-         ORDER BY status ASC`,
+        `SELECT t.status, COUNT(t.id)::int AS count
+         FROM core.tasks t
+         JOIN core.contents c ON c.id = t.content_id
+         JOIN core.contracts co ON co.id = c.contract_id
+         WHERE t.assigned_to = $1 AND t.deleted_at IS NULL
+           AND c.deleted_at IS NULL AND c.is_active = true
+           AND co.deleted_at IS NULL AND co.is_active = true
+         GROUP BY t.status
+         ORDER BY t.status ASC`,
         [userId]
       )
     : await pool.query(
-        `SELECT status, COUNT(*)::int AS count
-         FROM core.tasks
-         WHERE deleted_at IS NULL
-         GROUP BY status
-         ORDER BY status ASC`
+        `SELECT t.status, COUNT(t.id)::int AS count
+         FROM core.tasks t
+         JOIN core.contents c ON c.id = t.content_id
+         JOIN core.contracts co ON co.id = c.contract_id
+         WHERE t.deleted_at IS NULL
+           AND c.deleted_at IS NULL AND c.is_active = true
+           AND co.deleted_at IS NULL AND co.is_active = true
+         GROUP BY t.status
+         ORDER BY t.status ASC`
       );
   return {
     widget: "tasks-by-status",
@@ -245,10 +280,11 @@ export const getTasksTitlePriorityWidget = async (userId, query = {}) => {
         `SELECT t.id, t.title, c.priority
          FROM core.tasks t
          JOIN core.contents c ON c.id = t.content_id
+         JOIN core.contracts co ON co.id = c.contract_id
          WHERE t.assigned_to = $1
            AND t.deleted_at IS NULL
-           AND c.deleted_at IS NULL
-           AND c.is_active = true
+           AND c.deleted_at IS NULL AND c.is_active = true
+           AND co.deleted_at IS NULL AND co.is_active = true
          ORDER BY t.created_at DESC
          LIMIT $2`,
         [userId, limit]
@@ -258,10 +294,11 @@ export const getTasksTitlePriorityWidget = async (userId, query = {}) => {
                 u.full_name AS assigned_to_name
          FROM core.tasks t
          JOIN core.contents c ON c.id = t.content_id
+         JOIN core.contracts co ON co.id = c.contract_id
          LEFT JOIN core.users u ON u.id = t.assigned_to
          WHERE t.deleted_at IS NULL
-           AND c.deleted_at IS NULL
-           AND c.is_active = true
+           AND c.deleted_at IS NULL AND c.is_active = true
+           AND co.deleted_at IS NULL AND co.is_active = true
          ORDER BY t.created_at DESC
          LIMIT $1`,
         [limit]
@@ -276,19 +313,27 @@ export const getTasksByStatusChart = async (userId) => {
   // userId = null → superadmin: semua task tanpa filter assigned_to
   const { rows } = userId !== null
     ? await pool.query(
-        `SELECT status, COUNT(*)::int AS count
-         FROM core.tasks
-         WHERE assigned_to = $1 AND deleted_at IS NULL
-         GROUP BY status
-         ORDER BY status ASC`,
+        `SELECT t.status, COUNT(t.id)::int AS count
+         FROM core.tasks t
+         JOIN core.contents c ON c.id = t.content_id
+         JOIN core.contracts co ON co.id = c.contract_id
+         WHERE t.assigned_to = $1 AND t.deleted_at IS NULL
+           AND c.deleted_at IS NULL AND c.is_active = true
+           AND co.deleted_at IS NULL AND co.is_active = true
+         GROUP BY t.status
+         ORDER BY t.status ASC`,
         [userId]
       )
     : await pool.query(
-        `SELECT status, COUNT(*)::int AS count
-         FROM core.tasks
-         WHERE deleted_at IS NULL
-         GROUP BY status
-         ORDER BY status ASC`
+        `SELECT t.status, COUNT(t.id)::int AS count
+         FROM core.tasks t
+         JOIN core.contents c ON c.id = t.content_id
+         JOIN core.contracts co ON co.id = c.contract_id
+         WHERE t.deleted_at IS NULL
+           AND c.deleted_at IS NULL AND c.is_active = true
+           AND co.deleted_at IS NULL AND co.is_active = true
+         GROUP BY t.status
+         ORDER BY t.status ASC`
       );
   return {
     metric: "tasks_by_status",
@@ -313,11 +358,15 @@ export const getCommentsRevisionChart = async (userId, query = {}) => {
          assignee.full_name AS assigned_to_name
        FROM core.task_comments tc
        JOIN core.tasks t ON t.id = tc.task_id
+       JOIN core.contents c ON c.id = t.content_id
+       JOIN core.contracts co ON co.id = c.contract_id
        LEFT JOIN core.users u ON u.id = tc.user_id
        LEFT JOIN core.users assignee ON assignee.id = t.assigned_to
        WHERE t.status = 'revision'
          AND tc.deleted_at IS NULL
          AND t.deleted_at IS NULL
+         AND c.deleted_at IS NULL AND c.is_active = true
+         AND co.deleted_at IS NULL AND co.is_active = true
        ORDER BY tc.created_at DESC
        LIMIT $1`,
       [limit]
@@ -336,11 +385,15 @@ export const getCommentsRevisionChart = async (userId, query = {}) => {
        tc.created_at
      FROM core.task_comments tc
      JOIN core.tasks t ON t.id = tc.task_id
+     JOIN core.contents c ON c.id = t.content_id
+     JOIN core.contracts co ON co.id = c.contract_id
      LEFT JOIN core.users u ON u.id = tc.user_id
      WHERE t.assigned_to = $1
        AND t.status = 'revision'
        AND tc.deleted_at IS NULL
        AND t.deleted_at IS NULL
+       AND c.deleted_at IS NULL AND c.is_active = true
+       AND co.deleted_at IS NULL AND co.is_active = true
      ORDER BY tc.created_at DESC
      LIMIT $2`,
     [userId, limit]
@@ -352,57 +405,46 @@ export const getCommentsRevisionChart = async (userId, query = {}) => {
 };
 
 export const getSocialMediaSummary = async (userId) => {
-  const [countsResult, scheduledResult, publishedResult] = await Promise.all([
+  const [taskCountsResult, contentCountsResult] = await Promise.all([
+    // Task counts: on_progress & revision (task-level statuses)
     pool.query(
       `SELECT
-         COUNT(*)::int AS total,
-         COUNT(*) FILTER (WHERE status = 'to_do')::int AS to_do,
-         COUNT(*) FILTER (WHERE status = 'on_progress')::int AS on_progress,
-         COUNT(*) FILTER (WHERE status = 'scheduled')::int AS scheduled,
-         COUNT(*) FILTER (WHERE status = 'revision')::int AS revision,
-         COUNT(*) FILTER (WHERE status = 'published')::int AS published
-       FROM core.tasks
-       WHERE assigned_to = $1 AND deleted_at IS NULL`,
-      [userId]
-    ),
-    pool.query(
-      `SELECT t.id, t.title, t.deadline, c.title AS content_title
+         COUNT(t.id) FILTER (WHERE t.status = 'on_progress')::int AS on_progress,
+         COUNT(t.id) FILTER (WHERE t.status = 'revision')::int AS revision
        FROM core.tasks t
        JOIN core.contents c ON c.id = t.content_id
-       WHERE t.assigned_to = $1
-         AND t.status = 'scheduled'
-         AND t.deleted_at IS NULL
-       ORDER BY t.deadline ASC NULLS LAST
-       LIMIT 10`,
+       JOIN core.contracts co ON co.id = c.contract_id
+       WHERE t.assigned_to = $1 AND t.deleted_at IS NULL
+         AND c.deleted_at IS NULL AND c.is_active = true
+         AND co.deleted_at IS NULL AND co.is_active = true`,
       [userId]
     ),
+    // Content counts: scheduled & published_today (content-level statuses)
     pool.query(
-      `SELECT t.id, t.title, t.deadline, c.title AS content_title
-       FROM core.tasks t
-       JOIN core.contents c ON c.id = t.content_id
-       WHERE t.assigned_to = $1
-         AND t.status = 'published'
-         AND t.deleted_at IS NULL
-       ORDER BY t.updated_at DESC
-       LIMIT 10`,
+      `SELECT
+         COUNT(c.id) FILTER (WHERE c.status = 'scheduled')::int AS scheduled,
+         COUNT(c.id) FILTER (
+           WHERE c.status = 'published'
+             AND c.published_at::date = CURRENT_DATE
+         )::int AS published_today
+       FROM core.contents c
+       JOIN core.contracts co ON co.id = c.contract_id
+       JOIN core.tasks t ON t.content_id = c.id AND t.assigned_to = $1 AND t.deleted_at IS NULL
+       WHERE c.deleted_at IS NULL AND c.is_active = true
+         AND co.deleted_at IS NULL AND co.is_active = true`,
       [userId]
     ),
   ]);
 
-  const counts = countsResult.rows[0] || {
-    total: 0, to_do: 0, on_progress: 0, scheduled: 0, revision: 0, published: 0,
-  };
+  const tasks = taskCountsResult.rows[0] || { on_progress: 0, revision: 0 };
+  const contents = contentCountsResult.rows[0] || { scheduled: 0, published_today: 0 };
 
   return {
     tasks: {
-      total: counts.total,
-      to_do: counts.to_do,
-      on_progress: counts.on_progress,
-      scheduled: counts.scheduled,
-      revision: counts.revision,
-      published: counts.published,
+      published_today: contents.published_today,
+      on_progress: tasks.on_progress,
+      scheduled: contents.scheduled,
+      revision: tasks.revision,
     },
-    scheduled_list: scheduledResult.rows,
-    published_list: publishedResult.rows,
   };
 };

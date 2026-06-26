@@ -14,11 +14,13 @@ export const getContentLeadSummary = async () => {
     ),
     pool.query(
       `SELECT
-         COUNT(*)::int AS total,
-         COUNT(*) FILTER (WHERE status = 'on_progress')::int AS on_progress,
-         COUNT(*) FILTER (WHERE status = 'published')::int AS published
-       FROM core.contents
-       WHERE deleted_at IS NULL AND is_active = true`,
+         COUNT(c.id)::int AS total,
+         COUNT(c.id) FILTER (WHERE c.status = 'on_progress')::int AS on_progress,
+         COUNT(c.id) FILTER (WHERE c.status = 'published')::int AS published
+       FROM core.contents c
+       JOIN core.contracts co ON co.id = c.contract_id
+       WHERE c.deleted_at IS NULL AND c.is_active = true
+         AND co.deleted_at IS NULL AND co.is_active = true`,
     ),
   ]);
 
@@ -41,13 +43,14 @@ export const getContentTimelineChart = async (query) => {
   const limit = Math.min(Math.max(parseInt(query.limit, 10) || 50, 1), 100);
 
   const { rows } = await pool.query(
-    `SELECT id, status, created_at
-     FROM core.contents
-     WHERE deleted_at IS NULL
-       AND is_active = true
-       AND created_at >= $1
-       AND created_at < $2
-     ORDER BY created_at DESC
+    `SELECT c.id, c.status, c.created_at
+     FROM core.contents c
+     JOIN core.contracts co ON co.id = c.contract_id
+     WHERE c.deleted_at IS NULL AND c.is_active = true
+       AND co.deleted_at IS NULL AND co.is_active = true
+       AND c.created_at >= $1
+       AND c.created_at < $2
+     ORDER BY c.created_at DESC
      LIMIT $3`,
     [from, to, limit],
   );
@@ -65,16 +68,17 @@ export const getContentByStatusDateChart = async (query) => {
 
   const { rows } = await pool.query(
     `SELECT
-       DATE(created_at) AS date,
-       status,
+       DATE(c.created_at) AS date,
+       c.status,
        COUNT(*)::int AS count
-     FROM core.contents
-     WHERE deleted_at IS NULL
-       AND is_active = true
-       AND created_at >= $1
-       AND created_at < $2
-     GROUP BY DATE(created_at), status
-     ORDER BY date ASC, status ASC`,
+     FROM core.contents c
+     JOIN core.contracts co ON co.id = c.contract_id
+     WHERE c.deleted_at IS NULL AND c.is_active = true
+       AND co.deleted_at IS NULL AND co.is_active = true
+       AND c.created_at >= $1
+       AND c.created_at < $2
+     GROUP BY DATE(c.created_at), c.status
+     ORDER BY date ASC, c.status ASC`,
     [from, to],
   );
 
@@ -117,8 +121,15 @@ export const getPillarsUsageChart = async () => {
        p.pillar_name,
        COUNT(c.id)::int AS count
      FROM core.pillars p
+     LEFT JOIN core.content_pillars cp ON cp.pillar_id = p.id
      LEFT JOIN core.contents c
-       ON c.pillar_id = p.id AND c.deleted_at IS NULL AND c.is_active = true
+       ON c.id = cp.content_id AND c.deleted_at IS NULL AND c.is_active = true
+       AND EXISTS (
+         SELECT 1 FROM core.contracts co
+         WHERE co.id = c.contract_id
+           AND co.deleted_at IS NULL
+           AND co.is_active = true
+       )
      WHERE p.is_active = true
      GROUP BY p.id, p.pillar_name
      ORDER BY count DESC, p.pillar_name ASC`,
@@ -147,15 +158,19 @@ export const getReviewsListWidget = async (query = {}) => {
 
   const [countResult, listResult] = await Promise.all([
     pool.query(
-      `SELECT COUNT(*)::int AS total
+      `SELECT COUNT(cr.id)::int AS total
        FROM core.content_reviews cr
        JOIN core.contents c ON c.id = cr.content_id
-       WHERE cr.deleted_at IS NULL AND ${ACTIVE_CONTENT}`,
+       JOIN core.contracts co ON co.id = c.contract_id
+       WHERE cr.deleted_at IS NULL
+         AND c.deleted_at IS NULL AND c.is_active = true
+         AND co.deleted_at IS NULL AND co.is_active = true`,
     ),
     pool.query(
       `SELECT
          cr.id,
          cr.content_id,
+         c.contract_id,
          c.title AS content_title,
          cr.reviewer_id,
          u.full_name AS reviewer_name,
@@ -164,8 +179,11 @@ export const getReviewsListWidget = async (query = {}) => {
          cr.created_at
        FROM core.content_reviews cr
        JOIN core.contents c ON c.id = cr.content_id
+       JOIN core.contracts co ON co.id = c.contract_id
        JOIN core.users u ON u.id = cr.reviewer_id
-       WHERE cr.deleted_at IS NULL AND ${ACTIVE_CONTENT}
+       WHERE cr.deleted_at IS NULL
+         AND c.deleted_at IS NULL AND c.is_active = true
+         AND co.deleted_at IS NULL AND co.is_active = true
        ORDER BY cr.created_at DESC
        LIMIT $1`,
       [limit],

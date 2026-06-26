@@ -5,6 +5,7 @@ import * as staffService from "./dashboard.staff.service.js";
 
 export const OWNER_METRICS = [
   "engagement",
+  "engagement_by_platform",
   "contracts_revenue",
   "contracts_by_status",
   "users_by_tasks",
@@ -32,7 +33,8 @@ export const ALL_CHART_METRICS = [
 ];
 
 const METRIC_ROLES = {
-  engagement: ["owner", "superadmin"],
+  engagement: ["owner", "content_lead", "admin_social_media", "superadmin"],
+  engagement_by_platform: ["owner", "content_lead", "admin_social_media", "superadmin"],
   contracts_revenue: ["owner", "superadmin"],
   contracts_by_status: ["owner", "superadmin"],
   users_by_tasks: ["owner", "superadmin"],
@@ -41,10 +43,10 @@ const METRIC_ROLES = {
   clients_by_active_contracts: ["owner", "superadmin"],
   clients_by_completed_contracts: ["owner", "superadmin"],
   content_timeline: ["content_lead", "superadmin"],
-  content_by_status_date: ["content_lead", "superadmin"],
-  pillars_usage: ["content_lead", "superadmin"],
+  content_by_status_date: ["owner", "content_lead", "admin_social_media", "superadmin"],
+  pillars_usage: ["owner", "content_lead", "admin_social_media", "superadmin"],
   tasks_by_status: ["script_writer", "content_editor", "admin_social_media", "superadmin"],
-  comments_revision: ["script_writer", "content_editor", "superadmin"],
+  comments_revision: ["script_writer", "content_editor", "admin_social_media", "superadmin"],
 };
 
 export const assertMetricAccess = (role, metric) => {
@@ -68,6 +70,8 @@ export const getChartByMetric = async (user, role, query) => {
   switch (metric) {
     case "engagement":
       return ownerCharts.getEngagementChart(query);
+    case "engagement_by_platform":
+      return ownerCharts.getEngagementByPlatformChart(query);
     case "contracts_revenue":
       return ownerCharts.getContractsRevenueChart(query);
     case "contracts_by_status":

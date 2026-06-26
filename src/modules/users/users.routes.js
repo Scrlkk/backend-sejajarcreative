@@ -4,6 +4,7 @@ import { createRules, updateRules } from "./users.validation.js";
 import authenticate from "../../middlewares/authenticate.js";
 import authorize from "../../middlewares/authorize.js";
 import validate from "../../middlewares/validate.js";
+import AppError from "../../utils/AppError.js";
 
 const router = Router();
 router.use(authenticate);
@@ -83,7 +84,18 @@ router.use(authenticate);
  *       422:
  *         $ref: '#/components/responses/ValidationError'
  */
-router.get("/", authorize("superadmin", "owner"), controller.getAll);
+router.get(
+  "/",
+  authorize(
+    "superadmin",
+    "owner",
+    "content_lead",
+    "content_editor",
+    "script_writer",
+    "admin_social_media"
+  ),
+  controller.getAll
+);
 router.post(
   "/",
   authorize("superadmin"),
@@ -187,10 +199,40 @@ router.post(
  *       404:
  *         $ref: '#/components/responses/NotFound'
  */
-router.get("/:id", authorize("superadmin", "owner"), controller.getById);
+router.get(
+  "/:id",
+  (req, res, next) => {
+    const userRoles = req.user.roles || [];
+    const isAuthorized =
+      userRoles.includes("superadmin") ||
+      userRoles.includes("owner") ||
+      req.user.role === "superadmin" ||
+      req.user.role === "owner";
+
+    if (!isAuthorized && Number(req.params.id) !== req.user.id) {
+      return next(new AppError("Forbidden: insufficient permissions", 403));
+    }
+    next();
+  },
+  controller.getById,
+);
+
 router.put(
   "/:id",
-  authorize("superadmin"),
+  (req, res, next) => {
+    const userRoles = req.user.roles || [];
+    const isSuperadmin =
+      userRoles.includes("superadmin") || req.user.role === "superadmin";
+
+    if (!isSuperadmin) {
+      if (Number(req.params.id) !== req.user.id) {
+        return next(new AppError("Forbidden: insufficient permissions", 403));
+      }
+      // Non-superadmin cannot change roles
+      delete req.body.roles;
+    }
+    next();
+  },
   updateRules,
   validate,
   controller.update,

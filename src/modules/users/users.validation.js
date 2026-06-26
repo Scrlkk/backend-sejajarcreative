@@ -33,6 +33,11 @@ export const createRules = [
 ];
 
 export const updateRules = [
+  body("full_name")
+    .optional()
+    .trim()
+    .isLength({ min: 3, max: 100 })
+    .withMessage("Nama lengkap minimal 3 karakter"),
   body("email")
     .optional()
     .isEmail()

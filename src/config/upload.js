@@ -26,6 +26,7 @@ const ALLOWED_MIMES = [
   "application/pdf",
   "application/msword", // .doc
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document", // .docx
+  "text/plain", // .txt
   // Video
   "video/mp4",
   "video/mpeg",
@@ -42,6 +43,7 @@ const ALLOWED_EXTS = [
   ".pdf",
   ".doc",
   ".docx",
+  ".txt",
   ".mp4",
   ".mpeg",
   ".mov",
@@ -49,16 +51,20 @@ const ALLOWED_EXTS = [
 ];
 
 const MAX_FILE_SIZE =
-  parseInt(process.env.MAX_FILE_SIZE, 10) || 50 * 1024 * 1024; // 50 MB default
+  parseInt(process.env.MAX_FILE_SIZE, 10) || 50 * 1024 * 1024;
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     cb(null, UPLOAD_DIR);
   },
   filename: (req, file, cb) => {
-    const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
     const ext = path.extname(file.originalname).toLowerCase();
-    cb(null, `task-output-${uniqueSuffix}${ext}`);
+    const baseName = path
+      .basename(file.originalname, ext)
+      .replace(/[^a-zA-Z0-9_\-]/g, "_")
+      .substring(0, 80);
+    const uniqueSuffix = Date.now();
+    cb(null, `${baseName}-${uniqueSuffix}${ext}`);
   },
 });
 

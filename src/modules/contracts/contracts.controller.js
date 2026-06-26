@@ -27,7 +27,7 @@ export const create = async (req, res, next) => {
 
 export const update = async (req, res, next) => {
   try {
-    success(res, await service.update(+req.params.id, req.body), "Contract diperbarui");
+    success(res, await service.update(+req.params.id, req.body, req.user.id), "Contract diperbarui");
   } catch (e) {
     next(e);
   }
@@ -35,8 +35,16 @@ export const update = async (req, res, next) => {
 
 export const remove = async (req, res, next) => {
   try {
-    await service.remove(+req.params.id);
+    await service.remove(+req.params.id, req.user.id);
     success(res, null, "Contract dihapus");
+  } catch (e) {
+    next(e);
+  }
+};
+
+export const restore = async (req, res, next) => {
+  try {
+    success(res, await service.restore(+req.params.id, req.user.id), "Contract diaktifkan kembali");
   } catch (e) {
     next(e);
   }

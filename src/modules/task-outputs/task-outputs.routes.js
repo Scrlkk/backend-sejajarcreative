@@ -143,6 +143,7 @@ router.post(
     "content_lead",
     "content_editor",
     "script_writer",
+    "admin_social_media",
   ),
   (req, res, next) => {
     upload.single("file")(req, res, (err) => {
@@ -190,7 +191,14 @@ router.post(
  */
 router.delete(
   "/:id",
-  authorize("superadmin", "owner", "content_lead"),
+  authorize(
+    "superadmin",
+    "owner",
+    "content_lead",
+    "content_editor",
+    "script_writer",
+    "admin_social_media",
+  ),
   controller.remove,
 );
 

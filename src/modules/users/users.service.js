@@ -18,7 +18,6 @@ const userListSelect = `
            '[]'::json
          ) AS roles
   FROM core.users u
-  WHERE u.is_active = true AND u.deleted_at IS NULL
 `;
 
 const mapUser = (row) => {
@@ -40,15 +39,21 @@ const mapUser = (row) => {
 
 export const getAll = async (query) => {
   const { limit, offset } = paginate(query);
-  const { rows } = await pool.query(
-    `${userListSelect} ORDER BY u.id LIMIT $1 OFFSET $2`,
-    [limit, offset],
-  );
+  let sql = userListSelect;
+
+  if (query.all !== "true") {
+    sql += " WHERE u.is_active = true AND u.deleted_at IS NULL";
+  }
+
+  const { rows } = await pool.query(`${sql} ORDER BY u.id LIMIT $1 OFFSET $2`, [
+    limit,
+    offset,
+  ]);
   return rows.map(mapUser);
 };
 
 export const getById = async (id) => {
-  const { rows } = await pool.query(`${userListSelect} AND u.id = $1`, [id]);
+  const { rows } = await pool.query(`${userListSelect} WHERE u.id = $1`, [id]);
   if (!rows[0]) throw new AppError("User not found", 404);
   return mapUser(rows[0]);
 };

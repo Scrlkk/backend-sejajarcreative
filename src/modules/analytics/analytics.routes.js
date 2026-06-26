@@ -165,4 +165,10 @@ router.post(
   controller.record,
 );
 
+router.delete(
+  "/content/:contentId",
+  authorize("superadmin", "owner", "admin_social_media"),
+  controller.deleteByContent,
+);
+
 export default router;

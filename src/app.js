@@ -2,6 +2,7 @@ import env from "./config/env.js";
 
 import express from "express";
 import path from "path";
+import fs from "fs";
 import { fileURLToPath } from "url";
 import helmet from "helmet";
 import cors from "cors";
@@ -38,6 +39,8 @@ const app = express();
 
 app.use(
   helmet({
+    crossOriginResourcePolicy: { policy: "cross-origin" },
+    crossOriginEmbedderPolicy: false,
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
@@ -120,11 +123,36 @@ const __dirname = path.dirname(__filename);
 const UPLOAD_DIR =
   process.env.UPLOAD_DIR || path.join(__dirname, "..", "uploads");
 app.use("/uploads", express.static(UPLOAD_DIR));
+app.use("/api/uploads", express.static(UPLOAD_DIR));
+
+// Endpoint to stream media without showing extension in URL, preventing IDM interception
+const handleStreamMedia = (req, res) => {
+  try {
+    const basename = req.params.basename;
+    const files = fs.readdirSync(UPLOAD_DIR);
+    const matchedFile = files.find((file) => {
+      const extIndex = file.lastIndexOf(".");
+      const name = extIndex !== -1 ? file.substring(0, extIndex) : file;
+      return name === basename;
+    });
+
+    if (!matchedFile) {
+      return res.status(404).send("File not found");
+    }
+
+    const filePath = path.resolve(UPLOAD_DIR, matchedFile);
+    res.sendFile(filePath);
+  } catch (error) {
+    console.error("Error streaming media file:", error);
+    res.status(500).send("Error streaming media file");
+  }
+};
+
+app.get("/stream-media/:basename", handleStreamMedia);
+app.get("/api/stream-media/:basename", handleStreamMedia);
 
 // Auto-log all authenticated API requests to audit.activity_logs
 app.use(activityLogger);
-
-app.use("/api", apiLimiter);
 
 app.use(
   "/api/docs",

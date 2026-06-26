@@ -10,23 +10,30 @@ const STORAGE_LIMIT_MB =
 
 export const getStorageLimitMb = () => STORAGE_LIMIT_MB;
 
-const getDirSizeBytes = (dirPath) => {
-  if (!fs.existsSync(dirPath)) return 0;
-
-  let total = 0;
-  for (const entry of fs.readdirSync(dirPath, { withFileTypes: true })) {
-    const fullPath = path.join(dirPath, entry.name);
-    if (entry.isDirectory()) {
-      total += getDirSizeBytes(fullPath);
-    } else if (entry.isFile()) {
-      total += fs.statSync(fullPath).size;
-    }
+// Async recursive dir size — mencegah event-loop blocking pada direktori besar
+const getDirSizeBytes = async (dirPath) => {
+  try {
+    const entries = await fs.promises.readdir(dirPath, { withFileTypes: true });
+    const sizes = await Promise.all(
+      entries.map(async (entry) => {
+        const fullPath = path.join(dirPath, entry.name);
+        if (entry.isDirectory()) {
+          return getDirSizeBytes(fullPath);
+        } else if (entry.isFile()) {
+          const stat = await fs.promises.stat(fullPath);
+          return stat.size;
+        }
+        return 0;
+      }),
+    );
+    return sizes.reduce((sum, s) => sum + s, 0);
+  } catch {
+    return 0;
   }
-  return total;
 };
 
-export const getStorageUsage = () => {
-  const usedBytes = getDirSizeBytes(UPLOAD_DIR);
+export const getStorageUsage = async () => {
+  const usedBytes = await getDirSizeBytes(UPLOAD_DIR);
   const usedMb = Math.round((usedBytes / (1024 * 1024)) * 100) / 100;
   const limitMb = STORAGE_LIMIT_MB;
   const usedPercent =
@@ -38,6 +45,7 @@ export const getStorageUsage = () => {
     used_percent: usedPercent,
   };
 };
+
 
 export const getSessionStats = async () => {
   const { rows } = await pool.query(

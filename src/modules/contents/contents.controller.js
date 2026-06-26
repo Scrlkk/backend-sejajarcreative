@@ -17,7 +17,7 @@ export const getById = async (req, res, next) => {
 };
 export const create = async (req, res, next) => {
   try {
-    created(res, await service.create(req.body), "Konten berhasil dibuat");
+    created(res, await service.create(req.body, req.user.id), "Konten berhasil dibuat");
   } catch (e) {
     next(e);
   }
@@ -35,7 +35,7 @@ export const update = async (req, res, next) => {
 };
 export const remove = async (req, res, next) => {
   try {
-    await service.remove(+req.params.id);
+    await service.remove(+req.params.id, req.user.id);
     success(res, null, "Konten berhasil dihapus");
   } catch (e) {
     next(e);
@@ -45,6 +45,14 @@ export const remove = async (req, res, next) => {
 export const publish = async (req, res, next) => {
   try {
     success(res, await service.publish(+req.params.id), "Konten dipublish");
+  } catch (e) {
+    next(e);
+  }
+};
+
+export const restore = async (req, res, next) => {
+  try {
+    success(res, await service.restore(+req.params.id, req.user.id), "Konten berhasil direstore");
   } catch (e) {
     next(e);
   }

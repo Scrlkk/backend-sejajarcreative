@@ -90,6 +90,7 @@ router.post(
     "content_lead",
     "content_editor",
     "script_writer",
+    "admin_social_media",
   ),
   createRules,
   validate,

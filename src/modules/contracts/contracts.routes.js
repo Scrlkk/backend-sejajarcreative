@@ -188,11 +188,12 @@ router.post(
 router.get("/:id", controller.getById);
 router.put(
   "/:id",
-  authorize("superadmin", "owner"),
+  authorize("superadmin", "owner", "content_lead"),
   updateRules,
   validate,
   controller.update,
 );
 router.delete("/:id", authorize("superadmin", "owner"), controller.remove);
+router.post("/:id/restore", authorize("superadmin", "owner"), controller.restore);
 
 export default router;

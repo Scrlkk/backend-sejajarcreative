@@ -35,9 +35,12 @@ const getOwnerSummary = async () => {
            AND r.role_name NOT IN ('superadmin', 'owner')`,
       ),
       pool.query(
-        `SELECT COUNT(*)::int AS total
-         FROM core.contents
-         WHERE status = 'published' AND deleted_at IS NULL AND is_active = true`,
+        `SELECT COUNT(c.id)::int AS total
+         FROM core.contents c
+         JOIN core.contracts co ON co.id = c.contract_id
+         WHERE c.status = 'published'
+           AND c.deleted_at IS NULL AND c.is_active = true
+           AND co.deleted_at IS NULL AND co.is_active = true`,
       ),
       pool.query(
         `SELECT COUNT(*)::int AS total
@@ -123,7 +126,7 @@ export const getWidgets = async (user, name, query) => {
 
 export const getSystem = async () => {
   const [storage, sessions] = await Promise.all([
-    Promise.resolve(getStorageUsage()),
+    getStorageUsage(),
     getSessionStats(),
   ]);
 

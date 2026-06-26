@@ -1,6 +1,7 @@
 import pool from "../../config/database.js";
 import AppError from "../../utils/AppError.js";
 import { paginate } from "../../utils/pagination.js";
+import { createNotification } from "../notifications/notifications.service.js";
 
 export const getByTask = async (taskId, query) => {
   const { limit, offset } = paginate(query);
@@ -23,7 +24,7 @@ export const getById = async (id) => {
   return rows[0];
 };
 
-export const create = async (data) => {
+export const create = async (data, userId) => {
   const { task_id, caption, hashtag, file_url } = data;
 
   const { rows: versionRows } = await pool.query(
@@ -31,18 +32,69 @@ export const create = async (data) => {
     [task_id],
   );
 
+  const nextVersion = versionRows[0].next_version;
+
   const { rows } = await pool.query(
     `INSERT INTO core.task_outputs (task_id, caption, hashtag, file_url, version)
      VALUES ($1,$2,$3,$4,$5) RETURNING *`,
-    [task_id, caption, hashtag, file_url, versionRows[0].next_version],
+    [task_id, caption, hashtag, file_url, nextVersion],
   );
-  return rows[0];
+
+  const output = rows[0];
+
+  return output;
 };
 
-export const remove = async (id) => {
+export const remove = async (id, user) => {
+  const { rows } = await pool.query(
+    `SELECT t_out.*, t.assigned_to, t.status AS task_status
+     FROM core.task_outputs t_out
+     JOIN core.tasks t ON t.id = t_out.task_id
+     WHERE t_out.id = $1 AND t_out.deleted_at IS NULL`,
+    [id],
+  );
+
+  if (!rows[0]) {
+    throw new AppError("Task output not found", 404);
+  }
+
+  const taskOutput = rows[0];
+
+  const userRoles = user.roles?.length
+    ? user.roles
+    : user.role
+      ? [user.role]
+      : [];
+  const isLeadOrAdmin = userRoles.some((r) =>
+    ["superadmin", "owner", "content_lead"].includes(r),
+  );
+
+  if (!isLeadOrAdmin) {
+    if (Number(taskOutput.assigned_to) !== Number(user.id)) {
+      throw new AppError("Forbidden: You are not authorized to delete this task output", 403);
+    }
+    if (["approved", "scheduled", "published"].includes(taskOutput.task_status?.toLowerCase())) {
+      throw new AppError("Forbidden: Cannot delete task output of an approved, scheduled, or published task", 403);
+    }
+  }
+
   const { rowCount } = await pool.query(
     "UPDATE core.task_outputs SET deleted_at = now() WHERE id = $1 AND deleted_at IS NULL",
     [id],
   );
   if (!rowCount) throw new AppError("Task output not found", 404);
+
+  // If no remaining outputs for this task, reset status from review → on_progress
+  const { rows: remaining } = await pool.query(
+    "SELECT COUNT(*)::int AS cnt FROM core.task_outputs WHERE task_id = $1 AND deleted_at IS NULL",
+    [taskOutput.task_id],
+  );
+
+  if (remaining[0].cnt === 0) {
+    await pool.query(
+      `UPDATE core.tasks SET status = 'on_progress', updated_at = now()
+       WHERE id = $1 AND status = 'review'`,
+      [taskOutput.task_id],
+    );
+  }
 };

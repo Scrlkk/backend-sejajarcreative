@@ -76,7 +76,7 @@ router.get("/", controller.getAll);
 router.post(
   "/",
   authenticate,
-  authorize("superadmin", "owner"),
+  authorize("superadmin", "owner", "content_lead"),
   createRules,
   validate,
   controller.create,
@@ -175,7 +175,7 @@ router.get("/:id", controller.getById);
 router.put(
   "/:id",
   authenticate,
-  authorize("superadmin", "owner"),
+  authorize("superadmin", "owner", "content_lead"),
   updateRules,
   validate,
   controller.update,
@@ -183,7 +183,7 @@ router.put(
 router.delete(
   "/:id",
   authenticate,
-  authorize("superadmin", "owner"),
+  authorize("superadmin", "owner", "content_lead"),
   controller.remove,
 );
 
