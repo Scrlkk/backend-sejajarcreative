@@ -215,3 +215,7 @@ superadmin ➔ owner ➔ content_lead ➔ content_editor / script_writer / admin
 ```
 
 Setiap request ke route terproteksi wajib menyertakan token JWT pada header `Authorization: Bearer <token>`. Middleware `authorize()` di backend akan memeriksa peran pengguna secara real-time sebelum mengizinkan aksi.
+
+---
+
+Developed by the **Scrlkk**.
