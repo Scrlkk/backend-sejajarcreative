@@ -1,5 +1,5 @@
-import { verifyAccess } from "../utils/jwt.js";
-import AppError from "../utils/AppError.js";
+import { verifyAccess } from "#utils/jwt.js";
+import AppError from "#utils/AppError.js";
 
 const authenticate = (req, res, next) => {
   const header = req.headers.authorization;

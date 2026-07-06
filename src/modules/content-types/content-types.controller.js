@@ -1,5 +1,5 @@
 import * as service from "./content-types.service.js";
-import { success, created } from "../../utils/response.js";
+import { success, created } from "#utils/response.js";
 
 export const getAll = async (req, res, next) => {
   try {

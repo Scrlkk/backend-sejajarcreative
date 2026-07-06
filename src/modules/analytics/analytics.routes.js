@@ -1,9 +1,9 @@
 import { Router } from "express";
 import * as controller from "./analytics.controller.js";
 import { recordRules, topContentsRules } from "./analytics.validation.js";
-import authenticate from "../../middlewares/authenticate.js";
-import authorize from "../../middlewares/authorize.js";
-import validate from "../../middlewares/validate.js";
+import authenticate from "#middlewares/authenticate.js";
+import authorize from "#middlewares/authorize.js";
+import validate from "#middlewares/validate.js";
 
 const router = Router();
 router.use(authenticate);

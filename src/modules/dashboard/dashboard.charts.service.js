@@ -1,4 +1,4 @@
-import pool from "../../config/database.js";
+import pool from "#config/database.js";
 import { parseDateRange } from "./dashboard.helpers.js";
 
 const ACTIVE_CONTRACT = `
@@ -14,15 +14,13 @@ const calcEngagementRate = (views, likes, comments, shares) => {
   return Math.round(((Number(likes || 0) + Number(comments || 0) + Number(shares || 0)) / views) * 1000) / 10;
 };
 
-export const getEngagementChart = async (query) => {
+export const getEngagementChart = async (ownerId, query) => {
   const { from, to } = parseDateRange(query);
   const duration = to.getTime() - from.getTime();
   const prevFrom = new Date(from.getTime() - duration);
   const prevTo = from;
 
-  const [totalsResult, seriesResult, prevTotalsResult] = await Promise.all([
-    pool.query(
-      `SELECT
+  let totalsSql = `SELECT
          COALESCE(SUM(e.views), 0)::int AS views,
          COALESCE(SUM(e.likes), 0)::int AS likes,
          COALESCE(SUM(e.comments), 0)::int AS comments,
@@ -32,11 +30,14 @@ export const getEngagementChart = async (query) => {
        JOIN core.contracts co ON co.id = c.contract_id
        WHERE e.recorded_at >= $1 AND e.recorded_at < $2
          AND c.deleted_at IS NULL AND c.is_active = true
-         AND co.deleted_at IS NULL AND co.is_active = true`,
-      [from, to],
-    ),
-    pool.query(
-      `SELECT
+         AND co.deleted_at IS NULL AND co.is_active = true`;
+  const totalsParams = [from, to];
+  if (ownerId) {
+    totalsSql += ` AND co.created_by = $3`;
+    totalsParams.push(ownerId);
+  }
+
+  let seriesSql = `SELECT
          DATE(e.recorded_at) AS date,
          SUM(e.views)::int AS views,
          SUM(e.likes)::int AS likes,
@@ -47,13 +48,15 @@ export const getEngagementChart = async (query) => {
        JOIN core.contracts co ON co.id = c.contract_id
        WHERE e.recorded_at >= $1 AND e.recorded_at < $2
          AND c.deleted_at IS NULL AND c.is_active = true
-         AND co.deleted_at IS NULL AND co.is_active = true
-       GROUP BY DATE(e.recorded_at)
-       ORDER BY date ASC`,
-      [from, to],
-    ),
-    pool.query(
-      `SELECT
+         AND co.deleted_at IS NULL AND co.is_active = true`;
+  const seriesParams = [from, to];
+  if (ownerId) {
+    seriesSql += ` AND co.created_by = $3`;
+    seriesParams.push(ownerId);
+  }
+  seriesSql += ` GROUP BY DATE(e.recorded_at) ORDER BY date ASC`;
+
+  let prevTotalsSql = `SELECT
          COALESCE(SUM(e.views), 0)::int AS views,
          COALESCE(SUM(e.likes), 0)::int AS likes,
          COALESCE(SUM(e.comments), 0)::int AS comments,
@@ -63,9 +66,17 @@ export const getEngagementChart = async (query) => {
        JOIN core.contracts co ON co.id = c.contract_id
        WHERE e.recorded_at >= $1 AND e.recorded_at < $2
          AND c.deleted_at IS NULL AND c.is_active = true
-         AND co.deleted_at IS NULL AND co.is_active = true`,
-      [prevFrom, prevTo],
-    ),
+         AND co.deleted_at IS NULL AND co.is_active = true`;
+  const prevTotalsParams = [prevFrom, prevTo];
+  if (ownerId) {
+    prevTotalsSql += ` AND co.created_by = $3`;
+    prevTotalsParams.push(ownerId);
+  }
+
+  const [totalsResult, seriesResult, prevTotalsResult] = await Promise.all([
+    pool.query(totalsSql, totalsParams),
+    pool.query(seriesSql, seriesParams),
+    pool.query(prevTotalsSql, prevTotalsParams),
   ]);
 
   const totals = totalsResult.rows[0];
@@ -109,7 +120,7 @@ export const getEngagementChart = async (query) => {
   };
 };
 
-export const getEngagementByPlatformChart = async (query) => {
+export const getEngagementByPlatformChart = async (ownerId, query) => {
   const { from, to } = parseDateRange(query);
 
   const chartMetric = ["views", "likes", "comments", "shares"].includes(query.chartMetric)
@@ -137,8 +148,7 @@ export const getEngagementByPlatformChart = async (query) => {
   const platforms = platformsResult.rows;
 
   // Fetch metric_value per platform per date
-  const seriesResult = await pool.query(
-    `SELECT
+  let seriesSql = `SELECT
        ${dateField} AS date,
        p.id AS platform_id,
        p.platform_name,
@@ -150,22 +160,30 @@ export const getEngagementByPlatformChart = async (query) => {
      JOIN core.contracts co ON co.id = c.contract_id
      WHERE e.recorded_at >= $1 AND e.recorded_at < $2
        AND c.deleted_at IS NULL AND c.is_active = true
-       AND co.deleted_at IS NULL AND co.is_active = true
-     GROUP BY date, p.id, p.platform_name, p.color_key
-     ORDER BY date ASC, p.platform_name ASC`,
-    [from, to],
-  );
+       AND co.deleted_at IS NULL AND co.is_active = true`;
+  const seriesParams = [from, to];
+  if (ownerId) {
+    seriesSql += ` AND co.created_by = $3`;
+    seriesParams.push(ownerId);
+  }
+  seriesSql += ` GROUP BY date, p.id, p.platform_name, p.color_key ORDER BY date ASC, p.platform_name ASC`;
 
   // Fetch milestone events (contracts launched in this period)
-  const milestonesResult = await pool.query(
-    `SELECT contract_name, DATE(created_at) AS date
+  let milestonesSql = `SELECT contract_name, DATE(created_at) AS date
      FROM core.contracts
      WHERE created_at >= $1 AND created_at < $2
-       AND deleted_at IS NULL AND is_active = true
-     ORDER BY created_at ASC
-     LIMIT 5`,
-    [from, to],
-  );
+       AND deleted_at IS NULL AND is_active = true`;
+  const milestonesParams = [from, to];
+  if (ownerId) {
+    milestonesSql += ` AND created_by = $3`;
+    milestonesParams.push(ownerId);
+  }
+  milestonesSql += ` ORDER BY created_at ASC LIMIT 5`;
+
+  const [seriesResult, milestonesResult] = await Promise.all([
+    pool.query(seriesSql, seriesParams),
+    pool.query(milestonesSql, milestonesParams),
+  ]);
   const milestones = milestonesResult.rows.map((row) => {
     const d = new Date(row.date);
     return {
@@ -220,11 +238,10 @@ export const getEngagementByPlatformChart = async (query) => {
   };
 };
 
-export const getContractsRevenueChart = async (query) => {
+export const getContractsRevenueChart = async (ownerId, query) => {
   const { from, to } = parseDateRange(query);
 
-  const { rows } = await pool.query(
-    `SELECT
+  let sql = `SELECT
        DATE(created_at) AS date,
        COALESCE(SUM(revenue), 0)::float AS revenue,
        COUNT(*)::int AS count
@@ -232,11 +249,15 @@ export const getContractsRevenueChart = async (query) => {
      WHERE deleted_at IS NULL
        AND is_active = true
        AND created_at >= $1
-       AND created_at < $2
-     GROUP BY DATE(created_at)
-     ORDER BY date ASC`,
-    [from, to],
-  );
+       AND created_at < $2`;
+  const params = [from, to];
+  if (ownerId) {
+    sql += ` AND created_by = $3`;
+    params.push(ownerId);
+  }
+  sql += ` GROUP BY DATE(created_at) ORDER BY date ASC`;
+
+  const { rows } = await pool.query(sql, params);
 
   const totalRevenue = rows.reduce((sum, row) => sum + Number(row.revenue), 0);
 
@@ -253,11 +274,10 @@ export const getContractsRevenueChart = async (query) => {
   };
 };
 
-export const getContractsByStatusChart = async (query) => {
+export const getContractsByStatusChart = async (ownerId, query) => {
   const { from, to } = parseDateRange(query);
 
-  const { rows } = await pool.query(
-    `SELECT
+  let sql = `SELECT
        status,
        COUNT(*)::int AS count,
        COALESCE(SUM(revenue), 0)::float AS revenue
@@ -265,11 +285,15 @@ export const getContractsByStatusChart = async (query) => {
      WHERE deleted_at IS NULL
        AND is_active = true
        AND created_at >= $1
-       AND created_at < $2
-     GROUP BY status
-     ORDER BY status ASC`,
-    [from, to],
-  );
+       AND created_at < $2`;
+  const params = [from, to];
+  if (ownerId) {
+    sql += ` AND created_by = $3`;
+    params.push(ownerId);
+  }
+  sql += ` GROUP BY status ORDER BY status ASC`;
+
+  const { rows } = await pool.query(sql, params);
 
   return {
     metric: "contracts_by_status",
@@ -283,21 +307,27 @@ export const getContractsByStatusChart = async (query) => {
   };
 };
 
-export const getUsersByTasksChart = async () => {
-  const { rows } = await pool.query(
-    `SELECT
+export const getUsersByTasksChart = async (ownerId) => {
+  let sql = `SELECT
        u.id,
        u.full_name,
        t.status,
        COUNT(*)::int AS count
      FROM core.tasks t
      JOIN core.users u ON u.id = t.assigned_to
+     JOIN core.contents c ON c.id = t.content_id
+     JOIN core.contracts co ON co.id = c.contract_id
      WHERE t.deleted_at IS NULL
        AND u.is_active = true
-       AND u.deleted_at IS NULL
-     GROUP BY u.id, u.full_name, t.status
-     ORDER BY u.full_name ASC, t.status ASC`,
-  );
+       AND u.deleted_at IS NULL`;
+  const params = [];
+  if (ownerId) {
+    sql += ` AND co.created_by = $1`;
+    params.push(ownerId);
+  }
+  sql += ` GROUP BY u.id, u.full_name, t.status ORDER BY u.full_name ASC, t.status ASC`;
+
+  const { rows } = await pool.query(sql, params);
 
   const usersMap = new Map();
 
@@ -321,12 +351,20 @@ export const getUsersByTasksChart = async () => {
   };
 };
 
-export const getClientsTotalChart = async () => {
-  const { rows } = await pool.query(
-    `SELECT COUNT(*)::int AS total
-     FROM core.clients
-     WHERE is_active = true AND deleted_at IS NULL`,
-  );
+export const getClientsTotalChart = async (ownerId) => {
+  let sql = `SELECT COUNT(*)::int AS total
+     FROM core.clients cl
+     WHERE cl.is_active = true AND cl.deleted_at IS NULL`;
+  const params = [];
+  if (ownerId) {
+    sql += ` AND EXISTS (
+      SELECT 1 FROM core.contracts co
+      WHERE co.client_id = cl.id AND co.created_by = $1 AND co.deleted_at IS NULL AND co.is_active = true
+    )`;
+    params.push(ownerId);
+  }
+
+  const { rows } = await pool.query(sql, params);
 
   return {
     metric: "clients_total",
@@ -334,32 +372,45 @@ export const getClientsTotalChart = async () => {
   };
 };
 
-export const getClientsNewChart = async (query) => {
+export const getClientsNewChart = async (ownerId, query) => {
   const { from, to } = parseDateRange(query, 30);
 
-  const [totalResult, seriesResult] = await Promise.all([
-    pool.query(
-      `SELECT COUNT(*)::int AS total
-       FROM core.clients
-       WHERE is_active = true
-         AND deleted_at IS NULL
-         AND created_at >= $1
-         AND created_at < $2`,
-      [from, to],
-    ),
-    pool.query(
-      `SELECT
-         DATE(created_at) AS date,
+  let totalSql = `SELECT COUNT(*)::int AS total
+       FROM core.clients cl
+       WHERE cl.is_active = true
+         AND cl.deleted_at IS NULL
+         AND cl.created_at >= $1
+         AND cl.created_at < $2`;
+  const totalParams = [from, to];
+  if (ownerId) {
+    totalSql += ` AND EXISTS (
+      SELECT 1 FROM core.contracts co
+      WHERE co.client_id = cl.id AND co.created_by = $3 AND co.deleted_at IS NULL AND co.is_active = true
+    )`;
+    totalParams.push(ownerId);
+  }
+
+  let seriesSql = `SELECT
+         DATE(cl.created_at) AS date,
          COUNT(*)::int AS count
-       FROM core.clients
-       WHERE is_active = true
-         AND deleted_at IS NULL
-         AND created_at >= $1
-         AND created_at < $2
-       GROUP BY DATE(created_at)
-       ORDER BY date ASC`,
-      [from, to],
-    ),
+       FROM core.clients cl
+       WHERE cl.is_active = true
+         AND cl.deleted_at IS NULL
+         AND cl.created_at >= $1
+         AND cl.created_at < $2`;
+  const seriesParams = [from, to];
+  if (ownerId) {
+    seriesSql += ` AND EXISTS (
+      SELECT 1 FROM core.contracts co
+      WHERE co.client_id = cl.id AND co.created_by = $3 AND co.deleted_at IS NULL AND co.is_active = true
+    )`;
+    seriesParams.push(ownerId);
+  }
+  seriesSql += ` GROUP BY DATE(cl.created_at) ORDER BY date ASC`;
+
+  const [totalResult, seriesResult] = await Promise.all([
+    pool.query(totalSql, totalParams),
+    pool.query(seriesSql, seriesParams),
   ]);
 
   return {
@@ -371,9 +422,8 @@ export const getClientsNewChart = async (query) => {
   };
 };
 
-export const getClientsByActiveContractsChart = async () => {
-  const { rows } = await pool.query(
-    `SELECT
+export const getClientsByActiveContractsChart = async (ownerId) => {
+  let sql = `SELECT
        c.id,
        c.client_name,
        c.company_name,
@@ -381,12 +431,17 @@ export const getClientsByActiveContractsChart = async () => {
        COALESCE(SUM(co.revenue), 0)::float AS total_revenue
      FROM core.clients c
      JOIN core.contracts co ON co.client_id = c.id
-     WHERE ${ACTIVE_CLIENT}
-       AND ${ACTIVE_CONTRACT}
-       AND co.status = 'active'
-     GROUP BY c.id, c.client_name, c.company_name
-     ORDER BY contract_count DESC, c.client_name ASC`,
-  );
+     WHERE c.is_active = true AND c.deleted_at IS NULL
+       AND co.is_active = true AND co.deleted_at IS NULL
+       AND co.status = 'active'`;
+  const params = [];
+  if (ownerId) {
+    sql += ` AND co.created_by = $1`;
+    params.push(ownerId);
+  }
+  sql += ` GROUP BY c.id, c.client_name, c.company_name ORDER BY contract_count DESC, c.client_name ASC`;
+
+  const { rows } = await pool.query(sql, params);
 
   return {
     metric: "clients_by_active_contracts",
@@ -401,9 +456,8 @@ export const getClientsByActiveContractsChart = async () => {
   };
 };
 
-export const getClientsByCompletedContractsChart = async () => {
-  const { rows } = await pool.query(
-    `SELECT
+export const getClientsByCompletedContractsChart = async (ownerId) => {
+  let sql = `SELECT
        c.id,
        c.client_name,
        c.company_name,
@@ -411,12 +465,17 @@ export const getClientsByCompletedContractsChart = async () => {
        COALESCE(SUM(co.revenue), 0)::float AS total_revenue
      FROM core.clients c
      JOIN core.contracts co ON co.client_id = c.id
-     WHERE ${ACTIVE_CLIENT}
+     WHERE c.is_active = true AND c.deleted_at IS NULL
        AND co.deleted_at IS NULL
-       AND co.status = 'completed'
-     GROUP BY c.id, c.client_name, c.company_name
-     ORDER BY contract_count DESC, c.client_name ASC`,
-  );
+       AND co.status = 'completed'`;
+  const params = [];
+  if (ownerId) {
+    sql += ` AND co.created_by = $1`;
+    params.push(ownerId);
+  }
+  sql += ` GROUP BY c.id, c.client_name, c.company_name ORDER BY contract_count DESC, c.client_name ASC`;
+
+  const { rows } = await pool.query(sql, params);
 
   return {
     metric: "clients_by_completed_contracts",

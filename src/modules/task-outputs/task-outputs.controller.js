@@ -1,8 +1,8 @@
 import * as service from "./task-outputs.service.js";
-import { success, created } from "../../utils/response.js";
+import { success, created } from "#utils/response.js";
 import fs from "fs";
 import path from "path";
-import { UPLOAD_DIR } from "../../config/upload.js";
+import { UPLOAD_DIR } from "#config/upload.js";
 
 const getFileSizeString = (fileUrl) => {
   if (!fileUrl) return null;
@@ -55,7 +55,7 @@ export const create = async (req, res, next) => {
     if (req.file) {
       data.file_url = `/uploads/${req.file.filename}`;
     }
-    const createdItem = await service.create(data, req.user.id);
+    const createdItem = await service.create(data, req.user);
     created(res, enrichOutput(createdItem), "Task output berhasil dibuat");
   } catch (e) {
     next(e);

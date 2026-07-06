@@ -1179,4 +1179,24 @@ superadmin → owner → content_lead → content_editor / script_writer / admin
 
 const swaggerSpec = swaggerJsdoc(options);
 
+export const swaggerUiOptions = {
+  customSiteTitle: "Sejajar API Docs",
+  customCss: `
+    .swagger-ui .topbar { background-color: #1a1a2e; }
+    .swagger-ui .topbar-wrapper img { display: none; }
+    .swagger-ui .topbar-wrapper::after {
+      content: 'Sejajar API Documentation';
+      color: white;
+      font-size: 1.2rem;
+      font-weight: bold;
+    }
+  `,
+  swaggerOptions: {
+    persistAuthorization: true,
+    displayRequestDuration: true,
+    filter: true,
+    tryItOutEnabled: true,
+  },
+};
+
 export default swaggerSpec;

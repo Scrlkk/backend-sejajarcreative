@@ -1,6 +1,6 @@
 import { Router } from "express";
-import { checkDBHealth } from "../config/database.js";
-import logger from "../config/logger.js";
+import { checkDBHealth } from "#config/database.js";
+import logger from "#config/logger.js";
 
 const router = Router();
 

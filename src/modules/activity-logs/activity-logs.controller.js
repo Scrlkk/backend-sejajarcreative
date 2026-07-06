@@ -1,5 +1,5 @@
 import * as service from "./activity-logs.service.js";
-import { success } from "../../utils/response.js";
+import { success } from "#utils/response.js";
 
 export const getAll = async (req, res, next) => {
   try {

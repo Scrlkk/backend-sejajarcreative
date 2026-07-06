@@ -1,8 +1,8 @@
 import { Router } from "express";
 import * as controller from "./notifications.controller.js";
 import { getAllRules, idRule } from "./notifications.validation.js";
-import authenticate from "../../middlewares/authenticate.js";
-import validate from "../../middlewares/validate.js";
+import authenticate from "#middlewares/authenticate.js";
+import validate from "#middlewares/validate.js";
 
 const router = Router();
 router.use(authenticate);

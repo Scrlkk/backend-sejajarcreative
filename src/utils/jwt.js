@@ -1,6 +1,6 @@
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
-import env from "../config/env.js";
+import env from "#config/env.js";
 import AppError from "./AppError.js";
 
 /**

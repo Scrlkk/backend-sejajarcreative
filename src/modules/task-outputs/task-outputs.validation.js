@@ -1,5 +1,5 @@
 import { body } from "express-validator";
-import { ALLOWED_EXTS, MAX_FILE_SIZE } from "../../config/upload.js";
+import { ALLOWED_EXTS, MAX_FILE_SIZE } from "#config/upload.js";
 
 export const createRules = [
   body("task_id").isInt({ min: 1 }).withMessage("task_id wajib diisi"),

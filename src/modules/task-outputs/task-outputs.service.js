@@ -1,6 +1,6 @@
-import pool from "../../config/database.js";
-import AppError from "../../utils/AppError.js";
-import { paginate } from "../../utils/pagination.js";
+import pool from "#config/database.js";
+import AppError from "#utils/AppError.js";
+import { paginate } from "#utils/pagination.js";
 import { createNotification } from "../notifications/notifications.service.js";
 
 export const getByTask = async (taskId, query) => {
@@ -24,8 +24,29 @@ export const getById = async (id) => {
   return rows[0];
 };
 
-export const create = async (data, userId) => {
+export const create = async (data, user) => {
   const { task_id, caption, hashtag, file_url } = data;
+
+  const { rows: taskRows } = await pool.query(
+    "SELECT * FROM core.tasks WHERE id = $1 AND deleted_at IS NULL",
+    [task_id],
+  );
+  if (!taskRows[0]) {
+    throw new AppError("Task not found", 404);
+  }
+  const task = taskRows[0];
+
+  const userRoles = user.roles?.length ? user.roles : user.role ? [user.role] : [];
+  const isSuperadmin = userRoles.includes("superadmin");
+  const isAssignee = Number(task.assigned_to) === Number(user.id);
+
+  if (!isAssignee && !isSuperadmin) {
+    throw new AppError("Forbidden: Only the task assignee can submit task outputs", 403);
+  }
+
+  if (task.status === "approved") {
+    throw new AppError("Forbidden: Cannot submit outputs for an approved task", 403);
+  }
 
   const { rows: versionRows } = await pool.query(
     "SELECT COALESCE(MAX(version), 0) + 1 AS next_version FROM core.task_outputs WHERE task_id = $1",
@@ -65,17 +86,15 @@ export const remove = async (id, user) => {
     : user.role
       ? [user.role]
       : [];
-  const isLeadOrAdmin = userRoles.some((r) =>
-    ["superadmin", "owner", "content_lead"].includes(r),
-  );
+  const isSuperadmin = userRoles.includes("superadmin");
+  const isAssignee = Number(taskOutput.assigned_to) === Number(user.id);
 
-  if (!isLeadOrAdmin) {
-    if (Number(taskOutput.assigned_to) !== Number(user.id)) {
-      throw new AppError("Forbidden: You are not authorized to delete this task output", 403);
-    }
-    if (["approved", "scheduled", "published"].includes(taskOutput.task_status?.toLowerCase())) {
-      throw new AppError("Forbidden: Cannot delete task output of an approved, scheduled, or published task", 403);
-    }
+  if (!isAssignee && !isSuperadmin) {
+    throw new AppError("Forbidden: You are not authorized to delete this task output", 403);
+  }
+
+  if (["approved", "scheduled", "published"].includes(taskOutput.task_status?.toLowerCase())) {
+    throw new AppError("Forbidden: Cannot delete task output of an approved, scheduled, or published task", 403);
   }
 
   const { rowCount } = await pool.query(

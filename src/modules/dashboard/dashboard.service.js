@@ -1,5 +1,5 @@
-import pool from "../../config/database.js";
-import AppError from "../../utils/AppError.js";
+import pool from "#config/database.js";
+import AppError from "#utils/AppError.js";
 import { getChartByMetric } from "./dashboard.charts.router.js";
 import { getWidget } from "./dashboard.widgets.service.js";
 import { getContentLeadSummary } from "./dashboard.content-lead.service.js";
@@ -13,7 +13,7 @@ import {
 } from "./dashboard.helpers.js";
 
 
-const getOwnerSummary = async () => {
+const getOwnerSummary = async (ownerId) => {
   const [contractsResult, usersResult, contentsResult, clientsResult] =
     await Promise.all([
       pool.query(
@@ -23,7 +23,8 @@ const getOwnerSummary = async () => {
            COUNT(*) FILTER (WHERE status = 'overdue')::int AS overdue,
            COALESCE(SUM(revenue) FILTER (WHERE status = 'active'), 0)::float AS total_revenue
          FROM core.contracts
-         WHERE is_active = true AND deleted_at IS NULL`,
+         WHERE is_active = true AND deleted_at IS NULL AND created_by = $1`,
+        [ownerId],
       ),
       pool.query(
         `SELECT COUNT(DISTINCT u.id)::int AS total
@@ -32,7 +33,16 @@ const getOwnerSummary = async () => {
          JOIN core.roles r ON r.id = ur.role_id
          WHERE u.is_active = true
            AND u.deleted_at IS NULL
-           AND r.role_name NOT IN ('superadmin', 'owner')`,
+           AND r.role_name NOT IN ('superadmin', 'owner')
+           AND EXISTS (
+             SELECT 1 FROM core.contracts co
+             LEFT JOIN core.contract_teams ct ON ct.contract_id = co.id
+             WHERE co.created_by = $1 
+               AND co.is_active = true 
+               AND co.deleted_at IS NULL
+               AND (co.lead_by = u.id OR ct.user_id = u.id)
+           )`,
+        [ownerId],
       ),
       pool.query(
         `SELECT COUNT(c.id)::int AS total
@@ -40,12 +50,22 @@ const getOwnerSummary = async () => {
          JOIN core.contracts co ON co.id = c.contract_id
          WHERE c.status = 'published'
            AND c.deleted_at IS NULL AND c.is_active = true
-           AND co.deleted_at IS NULL AND co.is_active = true`,
+           AND co.deleted_at IS NULL AND co.is_active = true
+           AND co.created_by = $1`,
+        [ownerId],
       ),
       pool.query(
         `SELECT COUNT(*)::int AS total
-         FROM core.clients
-         WHERE is_active = true AND deleted_at IS NULL`,
+         FROM core.clients cl
+         WHERE is_active = true AND deleted_at IS NULL
+           AND EXISTS (
+             SELECT 1 FROM core.contracts co
+             WHERE co.client_id = cl.id 
+               AND co.created_by = $1 
+               AND co.deleted_at IS NULL 
+               AND co.is_active = true
+           )`,
+        [ownerId],
       ),
     ]);
 
@@ -92,16 +112,16 @@ const getSuperadminSummary = async () => {
   };
 };
 
-export const getSummary = async (user) => {
-  const role = resolvePrimaryRole(user);
+export const getSummary = async (user, queryRole = null) => {
+  const role = resolvePrimaryRole(user, queryRole);
 
   switch (role) {
     case "superadmin":
       return getSuperadminSummary();
     case "owner":
-      return getOwnerSummary();
+      return getOwnerSummary(user.id);
     case "content_lead":
-      return getContentLeadSummary();
+      return getContentLeadSummary(user.id);
     case "script_writer":
     case "content_editor":
       return getStaffSummary(user.id);
@@ -115,12 +135,12 @@ export const getSummary = async (user) => {
   }
 };
 
-export const getCharts = async (user, query) => {
-  const role = resolvePrimaryRole(user);
+export const getCharts = async (user, query = {}) => {
+  const role = resolvePrimaryRole(user, query.role);
   return getChartByMetric(user, role, query);
 };
 
-export const getWidgets = async (user, name, query) => {
+export const getWidgets = async (user, name, query = {}) => {
   return getWidget(user, name, query);
 };
 

@@ -1,4 +1,4 @@
-import AppError from "../../utils/AppError.js";
+import AppError from "#utils/AppError.js";
 import * as contentLeadService from "./dashboard.content-lead.service.js";
 import * as ownerCharts from "./dashboard.charts.service.js";
 import * as staffService from "./dashboard.staff.service.js";
@@ -67,31 +67,33 @@ export const getChartByMetric = async (user, role, query) => {
   const { metric } = query;
   assertMetricAccess(role, metric);
 
+  const scopeId = role === "superadmin" ? null : user.id;
+
   switch (metric) {
     case "engagement":
-      return ownerCharts.getEngagementChart(query);
+      return ownerCharts.getEngagementChart(scopeId, query);
     case "engagement_by_platform":
-      return ownerCharts.getEngagementByPlatformChart(query);
+      return ownerCharts.getEngagementByPlatformChart(scopeId, query);
     case "contracts_revenue":
-      return ownerCharts.getContractsRevenueChart(query);
+      return ownerCharts.getContractsRevenueChart(scopeId, query);
     case "contracts_by_status":
-      return ownerCharts.getContractsByStatusChart(query);
+      return ownerCharts.getContractsByStatusChart(scopeId, query);
     case "users_by_tasks":
-      return ownerCharts.getUsersByTasksChart();
+      return ownerCharts.getUsersByTasksChart(scopeId);
     case "clients_total":
-      return ownerCharts.getClientsTotalChart();
+      return ownerCharts.getClientsTotalChart(scopeId);
     case "clients_new":
-      return ownerCharts.getClientsNewChart(query);
+      return ownerCharts.getClientsNewChart(scopeId, query);
     case "clients_by_active_contracts":
-      return ownerCharts.getClientsByActiveContractsChart();
+      return ownerCharts.getClientsByActiveContractsChart(scopeId);
     case "clients_by_completed_contracts":
-      return ownerCharts.getClientsByCompletedContractsChart();
+      return ownerCharts.getClientsByCompletedContractsChart(scopeId);
     case "content_timeline":
-      return contentLeadService.getContentTimelineChart(query);
+      return contentLeadService.getContentTimelineChart(scopeId, query);
     case "content_by_status_date":
-      return contentLeadService.getContentByStatusDateChart(query);
+      return contentLeadService.getContentByStatusDateChart(scopeId, query);
     case "pillars_usage":
-      return contentLeadService.getPillarsUsageChart();
+      return contentLeadService.getPillarsUsageChart(scopeId);
     case "tasks_by_status":
       // superadmin: null → semua task; staff: userId → task miliknya
       return staffService.getTasksByStatusChart(role === "superadmin" ? null : user.id);

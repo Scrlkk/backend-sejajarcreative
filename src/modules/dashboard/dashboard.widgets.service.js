@@ -1,4 +1,4 @@
-import AppError from "../../utils/AppError.js";
+import AppError from "#utils/AppError.js";
 import { resolvePrimaryRole } from "./dashboard.helpers.js";
 import { getReviewsListWidget } from "./dashboard.content-lead.service.js";
 import * as staffService from "./dashboard.staff.service.js";
@@ -16,8 +16,8 @@ const WIDGET_ACCESS = {
   "system-logs-summary": ["superadmin", "owner"],
 };
 
-export const getWidget = async (user, name, query) => {
-  const role = resolvePrimaryRole(user);
+export const getWidget = async (user, name, query = {}) => {
+  const role = resolvePrimaryRole(user, query.role);
   const allowed = WIDGET_ACCESS[name];
 
   if (!allowed) {
@@ -33,7 +33,7 @@ export const getWidget = async (user, name, query) => {
 
   switch (name) {
     case "reviews-list":
-      return getReviewsListWidget(query);
+      return getReviewsListWidget(role === "superadmin" ? null : user.id, query);
     case "upcoming-deadlines":
       // superadmin: null → lihat semua task; staff: userId → task miliknya
       return staffService.getUpcomingDeadlinesWidget(

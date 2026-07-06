@@ -1,12 +1,13 @@
-import pool from "../../config/database.js";
-import { hash } from "../../utils/hash.js";
-import AppError from "../../utils/AppError.js";
-import { paginate } from "../../utils/pagination.js";
+import pool from "#config/database.js";
+import { hash } from "#utils/hash.js";
+import AppError from "#utils/AppError.js";
+import { paginate } from "#utils/pagination.js";
 import {
   assignUserRole,
   fetchRoleNamesByUserId,
   pickPrimaryRole,
-} from "../../utils/userRoles.js";
+} from "#utils/userRoles.js";
+import { updateByIdWithWhitelist } from "#utils/dbHelper.js";
 
 const userListSelect = `
   SELECT u.id, u.full_name, u.email, u.is_active, u.created_at,
@@ -100,19 +101,9 @@ export const update = async (id, fields) => {
   try {
     await client.query("BEGIN");
 
-    const allowedFields = ["full_name", "email", "password"];
-    const keys = Object.keys(userFields).filter((k) =>
-      allowedFields.includes(k),
-    );
-
+    const keys = Object.keys(userFields);
     if (keys.length) {
-      const values = keys.map((k) => userFields[k]);
-      const set = keys.map((k, i) => `${k} = $${i + 1}`).join(", ");
-      await client.query(
-        `UPDATE core.users SET ${set}, updated_at = now()
-         WHERE id = $${keys.length + 1} RETURNING id`,
-        [...values, id],
-      );
+      await updateByIdWithWhitelist(client, "core.users", id, userFields);
     }
 
     if (roles !== undefined) {

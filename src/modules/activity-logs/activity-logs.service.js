@@ -1,5 +1,5 @@
-import pool from "../../config/database.js";
-import { paginate } from "../../utils/pagination.js";
+import pool from "#config/database.js";
+import { paginate } from "#utils/pagination.js";
 
 const LOG_SELECT = `
   SELECT al.id, al.user_id, u.full_name AS user_name, al.action,

@@ -21,8 +21,9 @@ Backend REST API untuk Sejajar Content Management System yang mengelola kontrak,
 
 ### Core & Framework
 
-- **Node.js** & **Express.js (v5)**: Engine runtime JavaScript sisi server dan framework web RESTful API utama.
+- **Node.js** & **Express.js (v5)**: Engine runtime JavaScript sisi server dan framework web RESTful API utama. Mendukung **Subpath Imports** (`#utils/*`, `#config/*`, `#middlewares/*`) secara native untuk impor absolut.
 - **PostgreSQL (`pg` pool)**: Sistem manajemen basis data relasional transaksional lengkap dengan pool koneksi dinamis.
+- **Vitest**: Framework pengujian unit modern (*testing runner*) untuk memverifikasi logika helper.
 
 ### Keamanan & Autentikasi
 
@@ -70,7 +71,7 @@ express-sejajar/
 │   │   ├── activity-logs/
 │   │   ├── notifications/
 │   │   └── dashboard/
-│   ├── routes/          # Healthcheck router
+│   ├── routes/          # API entry points (api.routes.js, health.routes.js)
 │   └── app.js           # Express App setup & mounting routes
 ├── server.js            # Entry point server
 └── package.json         # Dependencies & NPM Scripts
@@ -185,6 +186,7 @@ Sebelum memulai, pastikan perangkat Anda telah memasang:
 | `npm run migrate` | Menjalankan migrasi tabel-tabel baru ke database PostgreSQL. |
 | `npm run migrate:fresh` | Menghapus semua tabel (*drop*) lalu membuat ulang skema migrasi dari awal. |
 | `npm run seed` | Mengisi database dengan dummy data/seeder awal (akun user, pilar, dan tugas). |
+| `npm run test` | Mengeksekusi pengujian unit test (*unit testing*) menggunakan Vitest. |
 
 ---
 

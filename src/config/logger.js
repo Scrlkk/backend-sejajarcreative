@@ -2,10 +2,29 @@ import winston from "winston";
 import path from "path";
 import fs from "fs";
 
+import DailyRotateFile from "winston-daily-rotate-file";
+
 const logsDir = path.join(process.cwd(), "logs");
 if (!fs.existsSync(logsDir)) {
   fs.mkdirSync(logsDir, { recursive: true });
 }
+
+const errorRotateTransport = new DailyRotateFile({
+  filename: path.join(logsDir, "error-%DATE%.log"),
+  datePattern: "YYYY-[W]WW", // Rotate weekly
+  zippedArchive: true,      // Compress the rotated logs
+  maxSize: "20m",
+  maxFiles: "12",           // Keep logs for 12 weeks (3 months)
+  level: "error",
+});
+
+const combinedRotateTransport = new DailyRotateFile({
+  filename: path.join(logsDir, "combined-%DATE%.log"),
+  datePattern: "YYYY-[W]WW", // Rotate weekly
+  zippedArchive: true,      // Compress the rotated logs
+  maxSize: "20m",
+  maxFiles: "12",           // Keep logs for 12 weeks
+});
 
 const logger = winston.createLogger({
   level: process.env.LOG_LEVEL || "info",
@@ -15,21 +34,7 @@ const logger = winston.createLogger({
     winston.format.json(),
   ),
   defaultMeta: { service: "express-sejajar" },
-  transports: [
-
-    new winston.transports.File({
-      filename: path.join(logsDir, "error.log"),
-      level: "error",
-      maxsize: 5242880,
-      maxFiles: 5,
-    }),
- 
-    new winston.transports.File({
-      filename: path.join(logsDir, "combined.log"),
-      maxsize: 5242880,
-      maxFiles: 10,
-    }),
-  ],
+  transports: [errorRotateTransport, combinedRotateTransport],
 });
 
 

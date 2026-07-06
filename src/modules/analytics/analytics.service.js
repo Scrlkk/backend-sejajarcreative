@@ -1,6 +1,6 @@
-import pool from "../../config/database.js";
-import AppError from "../../utils/AppError.js";
-import { paginate } from "../../utils/pagination.js";
+import pool from "#config/database.js";
+import AppError from "#utils/AppError.js";
+import { paginate } from "#utils/pagination.js";
 
 export const record = async ({
   content_id,

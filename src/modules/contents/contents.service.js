@@ -1,7 +1,8 @@
-import pool from "../../config/database.js";
-import AppError from "../../utils/AppError.js";
-import { paginate } from "../../utils/pagination.js";
+import pool from "#config/database.js";
+import AppError from "#utils/AppError.js";
+import { paginate } from "#utils/pagination.js";
 import { createNotification } from "../notifications/notifications.service.js";
+import { updateByIdWithWhitelist } from "#utils/dbHelper.js";
 
 const listSelect = `
   SELECT c.*,
@@ -11,6 +12,8 @@ const listSelect = `
          cc.color_key AS category_color_key,
          co.contract_name,
          co.contract_code,
+         co.created_by AS contract_created_by,
+         co.lead_by AS contract_lead_by,
          (SELECT cr.feedback 
           FROM core.content_reviews cr 
           WHERE cr.content_id = c.id AND cr.deleted_at IS NULL 
@@ -80,6 +83,18 @@ const syncTeams = async (client, contentId, userIds) => {
     );
   }
 
+  // Soft-delete tasks of removed users
+  if (removedUsers.length > 0) {
+    await client.query(
+      `UPDATE core.tasks 
+       SET deleted_at = now(), is_active = false, updated_at = now()
+       WHERE content_id = $1 
+         AND assigned_to = ANY($2::int[]) 
+         AND deleted_at IS NULL`,
+      [contentId, removedUsers],
+    );
+  }
+
   return { addedUsers, removedUsers };
 };
 
@@ -100,7 +115,7 @@ const syncPillars = async (client, contentId, pillarIds) => {
 
 // ── Queries ───────────────────────────────────────────────────────────────────
 
-export const getAll = async (query) => {
+export const getAll = async (query, user) => {
   const { limit, offset } = paginate(query);
   let sql = listSelect;
   const params = [];
@@ -146,19 +161,41 @@ export const getAll = async (query) => {
     sql += ` AND c.priority = $${idx++}`;
     params.push(query.priority);
   }
+
+  // Scoping check for non-superadmins
+  if (user && !user.roles.includes("superadmin")) {
+    sql += ` AND (co.created_by = $${idx} OR co.lead_by = $${idx} OR EXISTS (SELECT 1 FROM core.content_teams ct WHERE ct.content_id = c.id AND ct.user_id = $${idx}))`;
+    params.push(user.id);
+    idx++;
+  }
+
   sql += ` ORDER BY c.due_date ASC NULLS LAST LIMIT $${idx++} OFFSET $${idx++}`;
   params.push(limit, offset);
   const { rows } = await pool.query(sql, params);
   return rows;
 };
 
-export const getById = async (id) => {
+export const getById = async (id, user) => {
   const { rows } = await pool.query(
     `${listSelect} WHERE c.id = $1 AND c.deleted_at IS NULL AND c.is_active = true`,
     [id],
   );
-  if (!rows[0]) throw new AppError("Content not found", 404);
-  return rows[0];
+  const content = rows[0];
+  if (!content) throw new AppError("Content not found", 404);
+
+  // Scoping check for non-superadmins
+  if (user && !user.roles.includes("superadmin")) {
+    const isTeamMember = content.teams?.some(t => Number(t.id) === Number(user.id));
+    if (
+      Number(content.contract_created_by) !== Number(user.id) &&
+      Number(content.contract_lead_by) !== Number(user.id) &&
+      !isTeamMember
+    ) {
+      throw new AppError("Forbidden: You do not have access to this content", 403);
+    }
+  }
+
+  return content;
 };
 
 export const create = async (data, createdBy) => {
@@ -180,6 +217,21 @@ export const create = async (data, createdBy) => {
 
   const client = await pool.connect();
   try {
+    const contractRes = await client.query(
+      "SELECT created_by, lead_by FROM core.contracts WHERE id = $1 AND deleted_at IS NULL AND is_active = true",
+      [contract_id]
+    );
+    const contract = contractRes.rows[0];
+    if (!contract) throw new AppError("Contract not found or inactive", 404);
+
+    if (createdBy && !createdBy.roles.includes("superadmin")) {
+      const isOwner = createdBy.roles.includes("owner") && Number(contract.created_by) === Number(createdBy.id);
+      const isLead = createdBy.roles.includes("content_lead") && Number(contract.lead_by) === Number(createdBy.id);
+      if (!isOwner && !isLead) {
+        throw new AppError("Forbidden: You cannot add content to this contract", 403);
+      }
+    }
+
     await client.query("BEGIN");
     const { rows } = await client.query(
       `INSERT INTO core.contents
@@ -218,7 +270,7 @@ export const create = async (data, createdBy) => {
       if (createdBy) {
         const creatorRes = await pool.query(
           "SELECT full_name FROM core.users WHERE id = $1",
-          [createdBy]
+          [createdBy.id]
         );
         if (creatorRes.rows[0]) {
           creatorName = creatorRes.rows[0].full_name;
@@ -234,11 +286,11 @@ export const create = async (data, createdBy) => {
       );
 
       for (const owner of ownersRes.rows) {
-        if (Number(owner.id) === Number(createdBy)) continue;
+        if (Number(owner.id) === Number(createdBy.id)) continue;
 
         await createNotification(null, {
           recipient_id: owner.id,
-          sender_id: createdBy || null,
+          sender_id: createdBy.id || null,
           title: "Rencana Konten Baru Dibuat",
           message: `Rencana konten baru "${title}" telah dibuat oleh ${creatorName}.`,
           source_type: "content",
@@ -249,7 +301,7 @@ export const create = async (data, createdBy) => {
       console.error("Failed to send content creation notification to owners:", err.message);
     }
 
-    return getById(rows[0].id);
+    return getById(rows[0].id, createdBy);
   } catch (e) {
     await client.query("ROLLBACK");
     throw e;
@@ -258,7 +310,7 @@ export const create = async (data, createdBy) => {
   }
 };
 
-export const update = async (id, fields) => {
+export const update = async (id, fields, user) => {
   const allowedFields = [
     "title",
     "description",
@@ -282,19 +334,22 @@ export const update = async (id, fields) => {
     throw new AppError("Tidak ada field valid untuk diupdate", 422);
   }
 
+  const existing = await getById(id, user);
+
+  if (user && !user.roles.includes("superadmin")) {
+    const isOwner = user.roles.includes("owner") && Number(existing.contract_created_by) === Number(user.id);
+    const isLead = user.roles.includes("content_lead") && Number(existing.contract_lead_by) === Number(user.id);
+    if (!isOwner && !isLead) {
+      throw new AppError("Forbidden: You cannot modify this content", 403);
+    }
+  }
+
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
 
     if (keys.length) {
-      const values = keys.map((k) => fields[k]);
-      const set = keys.map((k, i) => `${k} = $${i + 1}`).join(", ");
-      const { rows } = await client.query(
-        `UPDATE core.contents SET ${set}, updated_at = now()
-         WHERE id = $${keys.length + 1} AND deleted_at IS NULL RETURNING id`,
-        [...values, id],
-      );
-      if (!rows[0]) throw new AppError("Content not found", 404);
+      await updateByIdWithWhitelist(client, "core.contents", id, fields);
     }
 
     if (pillar_ids !== undefined) {
@@ -306,7 +361,12 @@ export const update = async (id, fields) => {
     }
 
     await client.query("COMMIT");
-    return getById(id);
+
+    if (team_user_ids !== undefined) {
+      await syncContentStatus(id);
+    }
+
+    return getById(id, user);
   } catch (e) {
     await client.query("ROLLBACK");
     throw e;
@@ -315,9 +375,17 @@ export const update = async (id, fields) => {
   }
 };
 
-export const remove = async (id, deletedBy) => {
-  const content = await getById(id);
+export const remove = async (id, user) => {
+  const content = await getById(id, user);
   if (!content) throw new AppError("Content not found", 404);
+
+  if (user && !user.roles.includes("superadmin")) {
+    const isOwner = user.roles.includes("owner") && Number(content.contract_created_by) === Number(user.id);
+    const isLead = user.roles.includes("content_lead") && Number(content.contract_lead_by) === Number(user.id);
+    if (!isOwner && !isLead) {
+      throw new AppError("Forbidden: You cannot delete this content", 403);
+    }
+  }
 
   const { rowCount } = await pool.query(
     `UPDATE core.contents SET deleted_at = now(), is_active = false, updated_at = now()
@@ -339,7 +407,7 @@ export const remove = async (id, deletedBy) => {
     for (const owner of ownersRes.rows) {
       await createNotification(null, {
         recipient_id: owner.id,
-        sender_id: deletedBy || null,
+        sender_id: user.id || null,
         title: "Rencana Konten Dihapus",
         message: `Rencana konten "${content.title}" telah dihapus.`,
         source_type: "content",
@@ -358,7 +426,7 @@ export const remove = async (id, deletedBy) => {
     for (const task of tasksRes.rows) {
       await createNotification(null, {
         recipient_id: task.assigned_to,
-        sender_id: deletedBy || null,
+        sender_id: user.id || null,
         title: "Tugas Dibatalkan/Dihapus",
         message: `Tugas Anda "${task.title}" telah dihapus/dibatalkan dari konten.`,
         source_type: "task",
@@ -370,7 +438,17 @@ export const remove = async (id, deletedBy) => {
   }
 };
 
-export const publish = async (id) => {
+export const publish = async (id, user) => {
+  const existing = await getById(id, user);
+
+  if (user && !user.roles.includes("superadmin")) {
+    const isOwner = user.roles.includes("owner") && Number(existing.contract_created_by) === Number(user.id);
+    const isLead = user.roles.includes("content_lead") && Number(existing.contract_lead_by) === Number(user.id);
+    if (!isOwner && !isLead) {
+      throw new AppError("Forbidden: You cannot publish this content", 403);
+    }
+  }
+
   const { rows } = await pool.query(
     `UPDATE core.contents
      SET status = 'published', published_at = COALESCE(published_at, now()), updated_at = now()
@@ -380,17 +458,34 @@ export const publish = async (id) => {
   );
   if (!rows[0])
     throw new AppError("Content not found atau belum berstatus scheduled atau approved", 422);
-  return getById(id);
+  return getById(id, user);
 };
 
-export const restore = async (id, restoredBy) => {
+export const restore = async (id, user) => {
+  const { rows: checkRows } = await pool.query(
+    `SELECT c.id, co.created_by AS contract_created_by, co.lead_by AS contract_lead_by
+     FROM core.contents c
+     JOIN core.contracts co ON co.id = c.contract_id
+     WHERE c.id = $1`,
+    [id],
+  );
+  if (!checkRows[0]) throw new AppError("Content tidak ditemukan", 404);
+
+  if (user && !user.roles.includes("superadmin")) {
+    const isOwner = user.roles.includes("owner") && Number(checkRows[0].contract_created_by) === Number(user.id);
+    const isLead = user.roles.includes("content_lead") && Number(checkRows[0].contract_lead_by) === Number(user.id);
+    if (!isOwner && !isLead) {
+      throw new AppError("Forbidden: You cannot restore this content", 403);
+    }
+  }
+
   const { rows } = await pool.query(
     `UPDATE core.contents SET is_active = true, deleted_at = NULL, updated_at = now()
      WHERE id = $1 RETURNING id`,
     [id],
   );
   if (!rows[0]) throw new AppError("Content tidak ditemukan", 404);
-  const content = await getById(id);
+  const content = await getById(id, user);
 
   try {
     // 1. Notify Owners: "Rencana Konten Diaktifkan Kembali"
@@ -405,7 +500,7 @@ export const restore = async (id, restoredBy) => {
     for (const owner of ownersRes.rows) {
       await createNotification(null, {
         recipient_id: owner.id,
-        sender_id: restoredBy || null,
+        sender_id: user.id || null,
         title: "Rencana Konten Diaktifkan Kembali",
         message: `Rencana konten "${content.title}" telah diaktifkan kembali.`,
         source_type: "content",
@@ -424,7 +519,7 @@ export const restore = async (id, restoredBy) => {
     for (const task of tasksRes.rows) {
       await createNotification(null, {
         recipient_id: task.assigned_to,
-        sender_id: restoredBy || null,
+        sender_id: user.id || null,
         title: "Tugas Diaktifkan Kembali",
         message: `Tugas Anda "${task.title}" telah diaktifkan kembali.`,
         source_type: "task",

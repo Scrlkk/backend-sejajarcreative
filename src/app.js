@@ -8,7 +8,7 @@ import helmet from "helmet";
 import cors from "cors";
 import morgan from "morgan";
 import swaggerUi from "swagger-ui-express";
-import swaggerSpec from "./config/swagger.js";
+import swaggerSpec, { swaggerUiOptions } from "#config/swagger.js";
 import logger from "./config/logger.js";
 
 import notFound from "./middlewares/notFound.js";
@@ -17,23 +17,7 @@ import { apiLimiter } from "./middlewares/rateLimiter.js";
 import activityLogger from "./middlewares/activityLogger.js";
 
 import healthRouter from "./routes/health.routes.js";
-import authRouter from "./modules/auth/auth.routes.js";
-import usersRouter from "./modules/users/users.routes.js";
-import clientsRouter from "./modules/clients/clients.routes.js";
-import platformsRouter from "./modules/platforms/platforms.routes.js";
-import contentCategoryRouter from "./modules/content-types/content-types.routes.js";
-import pillarsRouter from "./modules/pillars/pillars.routes.js";
-import contractsRouter from "./modules/contracts/contracts.routes.js";
-import tasksRouter from "./modules/tasks/tasks.routes.js";
-import contentsRouter from "./modules/contents/contents.routes.js";
-import reviewsRouter from "./modules/reviews/reviews.routes.js";
-import taskOutputsRouter from "./modules/task-outputs/task-outputs.routes.js";
-import taskCommentsRouter from "./modules/task-comments/task-comments.routes.js";
-import analyticsRouter from "./modules/analytics/analytics.routes.js";
-import portfolioRouter from "./modules/portfolio/portfolio.routes.js";
-import activityLogsRouter from "./modules/activity-logs/activity-logs.routes.js";
-import notificationsRouter from "./modules/notifications/notifications.routes.js";
-import dashboardRouter from "./modules/dashboard/dashboard.routes.js";
+import apiRouter from "./routes/api.routes.js";
 
 const app = express();
 
@@ -59,7 +43,7 @@ app.use(
           "https://validator.swagger.io",
         ],
         formAction: ["'self'"],
-        frameAncestors: ["'none'"],
+        frameAncestors: ["'self'"],
       },
     },
     hsts: {
@@ -116,6 +100,7 @@ app.use(
 
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
+app.use(apiLimiter);
 
 // Serve uploaded files statically
 const __filename = fileURLToPath(import.meta.url);
@@ -157,47 +142,12 @@ app.use(activityLogger);
 app.use(
   "/api/docs",
   swaggerUi.serve,
-  swaggerUi.setup(swaggerSpec, {
-    customSiteTitle: "Sejajar API Docs",
-    customCss: `
-    .swagger-ui .topbar { background-color: #1a1a2e; }
-    .swagger-ui .topbar-wrapper img { display: none; }
-    .swagger-ui .topbar-wrapper::after {
-      content: 'Sejajar API Documentation';
-      color: white;
-      font-size: 1.2rem;
-      font-weight: bold;
-    }
-  `,
-    swaggerOptions: {
-      persistAuthorization: true,
-      displayRequestDuration: true,
-      filter: true,
-      tryItOutEnabled: true,
-    },
-  }),
+  swaggerUi.setup(swaggerSpec, swaggerUiOptions),
 );
 
 app.use("/", healthRouter);
 
-const API = "/api";
-app.use(`${API}/auth`, authRouter);
-app.use(`${API}/users`, usersRouter);
-app.use(`${API}/clients`, clientsRouter);
-app.use(`${API}/platforms`, platformsRouter);
-app.use(`${API}/content-categories`, contentCategoryRouter);
-app.use(`${API}/pillars`, pillarsRouter);
-app.use(`${API}/contracts`, contractsRouter);
-app.use(`${API}/tasks`, tasksRouter);
-app.use(`${API}/task-outputs`, taskOutputsRouter);
-app.use(`${API}/task-comments`, taskCommentsRouter);
-app.use(`${API}/contents`, contentsRouter);
-app.use(`${API}/reviews`, reviewsRouter);
-app.use(`${API}/analytics`, analyticsRouter);
-app.use(`${API}/portfolio`, portfolioRouter);
-app.use(`${API}/activity-logs`, activityLogsRouter);
-app.use(`${API}/notifications`, notificationsRouter);
-app.use(`${API}/dashboard`, dashboardRouter);
+app.use("/api", apiRouter);
 
 app.use(notFound);
 app.use(errorHandler);

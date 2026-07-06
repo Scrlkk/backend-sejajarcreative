@@ -3,7 +3,7 @@ import pg from "pg";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
-import env from "../config/env.js";
+import env from "#config/env.js";
 
 // Pengganti __dirname di ES Module
 const __filename = fileURLToPath(import.meta.url);

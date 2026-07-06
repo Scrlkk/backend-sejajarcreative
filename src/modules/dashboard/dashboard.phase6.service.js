@@ -1,5 +1,5 @@
-import pool from "../../config/database.js";
-import AppError from "../../utils/AppError.js";
+import pool from "#config/database.js";
+import AppError from "#utils/AppError.js";
 import { getStorageUsage, getSessionStats } from "./dashboard.helpers.js";
 
 // ─── Calendar Widget ──────────────────────────────────────────────────────────

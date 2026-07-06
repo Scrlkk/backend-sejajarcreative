@@ -1,9 +1,9 @@
 import { Router } from "express";
 import * as controller from "./contracts.controller.js";
 import { createRules, updateRules } from "./contracts.validation.js";
-import authenticate from "../../middlewares/authenticate.js";
-import authorize from "../../middlewares/authorize.js";
-import validate from "../../middlewares/validate.js";
+import authenticate from "#middlewares/authenticate.js";
+import authorize from "#middlewares/authorize.js";
+import validate from "#middlewares/validate.js";
 
 const router = Router();
 router.use(authenticate);

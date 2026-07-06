@@ -7,47 +7,6 @@ export const paginate = (query = {}) => {
 };
 
 /**
- * Get paginated data dengan total count
- * @param {Pool} pool
- * @param {object} query
- * @param {string} baseSql
- * @param {array} params
- * @returns {Promise<object>} { limit, offset, total, pages } }
- */
-export const paginateWithCount = async (
-  pool,
-  query = {},
-  baseSql,
-  params = [],
-) => {
-  const { limit, offset } = paginate(query);
-
-  try {
-
-    const countSql = `SELECT COUNT(*) as total FROM (${baseSql}) AS _count`;
-    const countResult = await pool.query(countSql, params);
-    const total = parseInt(countResult.rows[0].total);
-
-
-    const dataSql = `${baseSql} LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
-    const dataResult = await pool.query(dataSql, [...params, limit, offset]);
-
-    return {
-      data: dataResult.rows,
-      pagination: {
-        limit,
-        offset,
-        total,
-        pages: Math.ceil(total / limit),
-        hasMore: offset + limit < total,
-      },
-    };
-  } catch (err) {
-    throw new AppError("Pagination query failed: " + err.message, 500);
-  }
-};
-
-/**
  * Helper untuk build WHERE clause dari query filters
  * Mencegah SQL injection dengan hanya accept known fields
  * @param {object} filters - Filter object

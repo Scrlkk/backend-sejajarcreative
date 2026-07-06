@@ -1,11 +1,11 @@
 import { Router } from "express";
 import * as controller from "./tasks.controller.js";
 import { createRules, updateRules } from "./tasks.validation.js";
-import authenticate from "../../middlewares/authenticate.js";
-import authorize from "../../middlewares/authorize.js";
-import validate from "../../middlewares/validate.js";
-import pool from "../../config/database.js";
-import AppError from "../../utils/AppError.js";
+import authenticate from "#middlewares/authenticate.js";
+import authorize from "#middlewares/authorize.js";
+import validate from "#middlewares/validate.js";
+import pool from "#config/database.js";
+import AppError from "#utils/AppError.js";
 
 const router = Router();
 router.use(authenticate);

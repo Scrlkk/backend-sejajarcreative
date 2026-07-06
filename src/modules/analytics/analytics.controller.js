@@ -1,5 +1,5 @@
 import * as service from "./analytics.service.js";
-import { success, created } from "../../utils/response.js";
+import { success, created } from "#utils/response.js";
 
 export const record = async (req, res, next) => {
   try {

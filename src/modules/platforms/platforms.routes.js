@@ -1,9 +1,9 @@
 import { Router } from "express";
 import * as controller from "./platforms.controller.js";
 import { createRules, updateRules } from "./platforms.validation.js";
-import authenticate from "../../middlewares/authenticate.js";
-import authorize from "../../middlewares/authorize.js";
-import validate from "../../middlewares/validate.js";
+import authenticate from "#middlewares/authenticate.js";
+import authorize from "#middlewares/authorize.js";
+import validate from "#middlewares/validate.js";
 
 const router = Router();
 
@@ -75,7 +75,7 @@ router.get("/", controller.getAll);
 router.post(
   "/",
   authenticate,
-  authorize("superadmin", "owner"),
+  authorize("superadmin", "owner", "content_lead"),
   createRules,
   validate,
   controller.create,
@@ -174,7 +174,7 @@ router.get("/:id", controller.getById);
 router.put(
   "/:id",
   authenticate,
-  authorize("superadmin", "owner"),
+  authorize("superadmin", "owner", "content_lead"),
   updateRules,
   validate,
   controller.update,
@@ -182,7 +182,7 @@ router.put(
 router.delete(
   "/:id",
   authenticate,
-  authorize("superadmin", "owner"),
+  authorize("superadmin", "owner", "content_lead"),
   controller.remove,
 );
 

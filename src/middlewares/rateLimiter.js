@@ -32,10 +32,16 @@ export const refreshLimiter = rateLimit({
  */
 export const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 100,
+  max: 1000, // Increased to support active SPA usage without false positives
   standardHeaders: true,
   legacyHeaders: false,
   skip: (req) => {
-    return req.path === "/health" || req.originalUrl.startsWith("/api/docs");
+    const url = req.originalUrl || "";
+    return (
+      req.path === "/health" ||
+      url.startsWith("/api/docs") ||
+      url.includes("/api/auth/login") ||
+      url.includes("/api/auth/refresh")
+    );
   },
 });

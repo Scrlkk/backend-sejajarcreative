@@ -1,8 +1,8 @@
-import pool from "../../config/database.js";
-import AppError from "../../utils/AppError.js";
-import { paginate } from "../../utils/pagination.js";
-import { updateByIdWithWhitelist } from "../../utils/dbHelper.js";
-import { pickPrimaryRole } from "../../utils/userRoles.js";
+import pool from "#config/database.js";
+import AppError from "#utils/AppError.js";
+import { paginate } from "#utils/pagination.js";
+import { updateByIdWithWhitelist } from "#utils/dbHelper.js";
+import { pickPrimaryRole } from "#utils/userRoles.js";
 import { createNotification } from "../notifications/notifications.service.js";
 
 const selectTasksBase = `
@@ -10,7 +10,7 @@ const selectTasksBase = `
          c.status AS content_status, c.due_date AS content_due_date, c.scheduled_at AS content_scheduled_at,
          u.full_name AS assignee_name, ct.contract_name,
          pl.platform_name, pl.color_key AS platform_color_key, cc.type_name AS category_name,
-         u2.full_name AS lead_name, ct.lead_by AS lead_id,
+         u2.full_name AS lead_name, ct.lead_by AS lead_id, ct.created_by AS contract_created_by,
          (
            SELECT p.pillar_name FROM core.content_pillars cp
            JOIN core.pillars p ON p.id = cp.pillar_id
@@ -64,7 +64,65 @@ const mapTask = (row) => {
   };
 };
 
-export const getAll = async (query) => {
+export const syncContentStatus = async (contentId) => {
+  try {
+    const { rows: contentRows } = await pool.query(
+      `SELECT status FROM core.contents WHERE id = $1 AND deleted_at IS NULL`,
+      [contentId],
+    );
+    if (contentRows[0] && contentRows[0].status !== "published") {
+      const { rows: siblingTasks } = await pool.query(
+        `SELECT id, status FROM core.tasks WHERE content_id = $1 AND deleted_at IS NULL`,
+        [contentId],
+      );
+      const totalTasks = siblingTasks.length;
+      const approvedCount = siblingTasks.filter(
+        (t) => t.status === "approved",
+      ).length;
+      const reviewCount = siblingTasks.filter(
+        (t) => t.status === "review",
+      ).length;
+      const revisionCount = siblingTasks.filter(
+        (t) => t.status === "revision",
+      ).length;
+
+      let newContentStatus = null;
+      if (totalTasks > 0) {
+        const toDoCount = siblingTasks.filter(
+          (t) => t.status === "to_do",
+        ).length;
+        const onProgressCount = siblingTasks.filter(
+          (t) => t.status === "on_progress",
+        ).length;
+
+        if (approvedCount === totalTasks) {
+          newContentStatus = "approved";
+        } else if (reviewCount > 0) {
+          newContentStatus = "review";
+        } else if (
+          revisionCount > 0 ||
+          approvedCount > 0 ||
+          onProgressCount > 0
+        ) {
+          newContentStatus = "on_progress";
+        } else if (toDoCount === totalTasks) {
+          newContentStatus = "assigned";
+        }
+      }
+
+      if (newContentStatus && newContentStatus !== contentRows[0].status) {
+        await pool.query(
+          `UPDATE core.contents SET status = $1, updated_at = now() WHERE id = $2 AND deleted_at IS NULL`,
+          [newContentStatus, contentId],
+        );
+      }
+    }
+  } catch (err) {
+    console.error("Failed to sync content plan status:", err.message);
+  }
+};
+
+export const getAll = async (query, user) => {
   const { limit, offset } = paginate(query);
   const showDeleted = query.status === "deleted";
   const taskFilter = showDeleted
@@ -96,25 +154,64 @@ export const getAll = async (query) => {
     sql += ` AND t.status = $${idx++}`;
     params.push(query.status);
   }
+
+  // Scoping check for non-superadmins
+  if (user && !user.roles.includes("superadmin")) {
+    sql += ` AND (t.assigned_to = $${idx} OR ct.lead_by = $${idx} OR ct.created_by = $${idx})`;
+    params.push(user.id);
+    idx++;
+  }
+
   sql += ` ORDER BY t.deadline ASC NULLS LAST LIMIT $${idx++} OFFSET $${idx++}`;
   params.push(limit, offset);
   const { rows } = await pool.query(sql, params);
   return rows.map(mapTask);
 };
 
-export const getById = async (id) => {
+export const getById = async (id, user) => {
   const { rows } = await pool.query(
     `${selectTasksBase} WHERE t.id = $1 AND t.deleted_at IS NULL AND t.is_active = true`,
     [id],
   );
-  if (!rows[0]) throw new AppError("Task not found", 404);
-  return mapTask(rows[0]);
+  const task = rows[0];
+  if (!task) throw new AppError("Task not found", 404);
+
+  // Scoping check for non-superadmins
+  if (user && !user.roles.includes("superadmin")) {
+    if (
+      Number(task.assigned_to) !== Number(user.id) &&
+      Number(task.lead_id) !== Number(user.id) &&
+      Number(task.contract_created_by) !== Number(user.id)
+    ) {
+      throw new AppError("Forbidden: You do not have access to this task", 403);
+    }
+  }
+
+  return mapTask(task);
 };
 
 export const create = async (
   { content_id, assigned_to, title, description, deadline, status },
   createdBy,
 ) => {
+  const contentRes = await pool.query(
+    `SELECT c.id, co.created_by AS contract_created_by, co.lead_by AS contract_lead_by
+     FROM core.contents c
+     JOIN core.contracts co ON co.id = c.contract_id
+     WHERE c.id = $1`,
+    [content_id],
+  );
+  const content = contentRes.rows[0];
+  if (!content) throw new AppError("Content not found", 404);
+
+  if (createdBy && !createdBy.roles.includes("superadmin")) {
+    const isOwner = createdBy.roles.includes("owner") && Number(content.contract_created_by) === Number(createdBy.id);
+    const isContractLead = createdBy.roles.includes("content_lead") && Number(content.contract_lead_by) === Number(createdBy.id);
+    if (!isOwner && !isContractLead) {
+      throw new AppError("Forbidden: You cannot create tasks for this content", 403);
+    }
+  }
+
   const targetStatus = status || "to_do";
   const { rows } = await pool.query(
     `INSERT INTO core.tasks (content_id, assigned_to, title, description, deadline, status)
@@ -140,7 +237,7 @@ export const create = async (
     if (title !== "Persiapan Konten") {
       await createNotification(null, {
         recipient_id: assigned_to,
-        sender_id: createdBy,
+        sender_id: createdBy.id,
         title: "Tugas Baru Ditugaskan",
         message: `Anda mendapat tugas baru: "${title}".`,
         source_type: "task",
@@ -154,34 +251,64 @@ export const create = async (
     );
   }
 
+  await syncContentStatus(content_id);
+
   return newTask;
 };
 
 export const update = async (id, fields, updatedBy) => {
-  const existingTask = await getById(id);
+  const existingTask = await getById(id, updatedBy);
   const oldAssignee = existingTask.assigned_to;
   const oldStatus = existingTask.status;
   const oldTitle = existingTask.title;
 
-  // Filter only allowed fields and run update; throws 422 if no valid fields
-  const allowedFields = ["title", "description", "status", "deadline", "assigned_to"];
-  const validFields = Object.fromEntries(
-    Object.entries(fields).filter(([k]) => allowedFields.includes(k))
-  );
-  if (!Object.keys(validFields).length)
-    throw new AppError("Tidak ada field valid untuk diupdate", 422);
+  if (updatedBy && !updatedBy.roles.includes("superadmin")) {
+    const isOwner = updatedBy.roles.includes("owner") && Number(existingTask.contract_created_by) === Number(updatedBy.id);
+    const isLead = updatedBy.roles.includes("content_lead") && Number(existingTask.lead_id) === Number(updatedBy.id);
+    const isAssignee = Number(existingTask.assigned_to) === Number(updatedBy.id);
 
-  const keys = Object.keys(validFields);
-  const values = keys.map((k) => validFields[k]);
-  const set = keys.map((k, i) => `${k} = $${i + 1}`).join(", ");
-  const { rows } = await pool.query(
-    `UPDATE core.tasks SET ${set}, updated_at = now()
-     WHERE id = $${keys.length + 1} AND deleted_at IS NULL RETURNING *`,
-    [...values, id],
-  );
-  if (!rows[0]) throw new AppError("Task not found", 404);
+    // If status is being updated, validate status value permission
+    if (fields.status && fields.status !== existingTask.status) {
+      if (!isAssignee) {
+        // Not assignee: must be owner or lead, and can only set status to revision or approved
+        if (!isOwner && !isLead) {
+          throw new AppError("Forbidden: You cannot modify this task status", 403);
+        }
+        const allowedReviewerStatuses = ["revision", "approved"];
+        if (!allowedReviewerStatuses.includes(fields.status)) {
+          throw new AppError("Forbidden: As owner/lead, you can only set task status to revision or approved", 403);
+        }
+      } else {
+        if (!isOwner && !isLead) {
+          const forbiddenAssigneeStatuses = ["revision", "approved"];
+          if (forbiddenAssigneeStatuses.includes(fields.status)) {
+            throw new AppError("Forbidden: As assignee, you cannot approve or request revision on your own task", 403);
+          }
+          if (fields.status === "review") {
+            const outputRes = await pool.query(
+              "SELECT COUNT(*)::int AS cnt FROM core.task_outputs WHERE task_id = $1 AND deleted_at IS NULL",
+              [id],
+            );
+            if (outputRes.rows[0].cnt === 0) {
+              throw new AppError("Forbidden: Cannot set task to review status without deliverables or caption", 403);
+            }
+          }
+        }
+      }
+    }
 
-  const updatedTask = rows[0];
+    // Check non-status fields (metadata)
+    const requestedFields = Object.keys(fields);
+    const nonStatusFields = requestedFields.filter(f => f !== "status");
+    if (nonStatusFields.length > 0) {
+      // Only owner can update metadata details
+      if (!isOwner && !isLead) {
+        throw new AppError("Forbidden: You do not have permission to update task details", 403);
+      }
+    }
+  }
+
+  const updatedTask = await updateByIdWithWhitelist(pool, "core.tasks", id, fields);
 
   // 1. Notify if assignee changed
   if (
@@ -203,7 +330,7 @@ export const update = async (id, fields, updatedBy) => {
 
       await createNotification(null, {
         recipient_id: fields.assigned_to,
-        sender_id: updatedBy,
+        sender_id: updatedBy.id,
         title: "Penugasan Tugas Baru",
         message: `Tugas "${fields.title || existingTask.title}" telah dialihkan/ditugaskan kepada Anda.`,
         source_type: "task",
@@ -220,68 +347,8 @@ export const update = async (id, fields, updatedBy) => {
   // 2. Notify if status changed
   if (fields.status && fields.status !== oldStatus) {
     const contentId = updatedTask.content_id;
-    try {
-      // Sync content plan status automatically based on tasks progression
-      const { rows: contentRows } = await pool.query(
-        `SELECT status FROM core.contents WHERE id = $1 AND deleted_at IS NULL`,
-        [contentId],
-      );
-      if (contentRows[0] && contentRows[0].status !== "published") {
-        const { rows: siblingTasks } = await pool.query(
-          `SELECT id, status FROM core.tasks WHERE content_id = $1 AND deleted_at IS NULL`,
-          [contentId],
-        );
-        const totalTasks = siblingTasks.length;
-        const approvedCount = siblingTasks.filter(
-          (t) => t.status === "approved",
-        ).length;
-        const reviewCount = siblingTasks.filter(
-          (t) => t.status === "review",
-        ).length;
-        const revisionCount = siblingTasks.filter(
-          (t) => t.status === "revision",
-        ).length;
-
-        let newContentStatus = null;
-        if (totalTasks > 0) {
-          const toDoCount = siblingTasks.filter(
-            (t) => t.status === "to_do",
-          ).length;
-          const onProgressCount = siblingTasks.filter(
-            (t) => t.status === "on_progress",
-          ).length;
-
-          if (approvedCount === totalTasks) {
-            // Content is "approved" (ready for admin social media to schedule)
-            // "scheduled" is only set when admin social media picks date/time via ModalPreviewPublish
-            newContentStatus = "approved";
-          } else if (reviewCount > 0) {
-            newContentStatus = "review";
-          } else if (
-            revisionCount > 0 ||
-            approvedCount > 0 ||
-            onProgressCount > 0
-          ) {
-            newContentStatus = "on_progress";
-          } else if (toDoCount === totalTasks) {
-            newContentStatus = "assigned";
-          }
-        }
-
-        if (newContentStatus && newContentStatus !== contentRows[0].status) {
-          await pool.query(
-            `UPDATE core.contents SET status = $1, updated_at = now() WHERE id = $2 AND deleted_at IS NULL`,
-            [newContentStatus, contentId],
-          );
-        }
-      }
-    } catch (err) {
-      console.error(
-        "Failed to sync content plan status based on task updates:",
-        err.message,
-      );
-    }
-
+    await syncContentStatus(contentId);
+ 
     if (fields.status === "review") {
       try {
         const leadRes = await pool.query(
@@ -295,7 +362,7 @@ export const update = async (id, fields, updatedBy) => {
         if (leadRes.rows[0]) {
           await createNotification(null, {
             recipient_id: leadRes.rows[0].lead_by,
-            sender_id: updatedBy,
+            sender_id: updatedBy.id,
             title: "Pengajuan Review Tugas",
             message: `Tugas "${existingTask.title}" telah diajukan untuk di-review pada kontrak "${leadRes.rows[0].contract_name}".`,
             source_type: "task",
@@ -309,7 +376,7 @@ export const update = async (id, fields, updatedBy) => {
       try {
         await createNotification(null, {
           recipient_id: updatedTask.assigned_to,
-          sender_id: updatedBy,
+          sender_id: updatedBy.id,
           title: "Revisi Tugas",
           message: `Tugas "${existingTask.title}" memerlukan revisi/perbaikan.`,
           source_type: "task",
@@ -325,7 +392,7 @@ export const update = async (id, fields, updatedBy) => {
       try {
         await createNotification(null, {
           recipient_id: updatedTask.assigned_to,
-          sender_id: updatedBy,
+          sender_id: updatedBy.id,
           title: "Tugas Disetujui",
           message: `Tugas "${existingTask.title}" telah disetujui. Terima kasih!`,
           source_type: "task",
@@ -339,20 +406,20 @@ export const update = async (id, fields, updatedBy) => {
       }
     }
   }
-
+ 
   // 3. Notify if title or description changed
   const newTitle = fields.title !== undefined ? fields.title : oldTitle;
   const titleChanged = fields.title !== undefined && fields.title !== oldTitle;
   const descChanged =
     fields.description !== undefined &&
     fields.description !== existingTask.description;
-
+ 
   if (titleChanged || descChanged) {
     try {
       if (oldTitle === "Persiapan Konten" && newTitle !== "Persiapan Konten") {
         await createNotification(null, {
           recipient_id: updatedTask.assigned_to,
-          sender_id: updatedBy,
+          sender_id: updatedBy.id,
           title: "Tugas Baru Ditugaskan",
           message: `Anda mendapat tugas baru: "${newTitle}".`,
           source_type: "task",
@@ -361,7 +428,7 @@ export const update = async (id, fields, updatedBy) => {
       } else if (oldTitle !== "Persiapan Konten") {
         await createNotification(null, {
           recipient_id: updatedTask.assigned_to,
-          sender_id: updatedBy,
+          sender_id: updatedBy.id,
           title: "Detail Tugas Diperbarui",
           message: `Tugas Anda "${newTitle}" telah diperbarui.`,
           source_type: "task",
@@ -372,12 +439,20 @@ export const update = async (id, fields, updatedBy) => {
       console.error("Failed to send task update notification:", err.message);
     }
   }
-
+ 
   return updatedTask;
 };
 
-export const remove = async (id, deletedBy) => {
-  const task = await getById(id);
+export const remove = async (id, user) => {
+  const task = await getById(id, user);
+
+  if (user && !user.roles.includes("superadmin")) {
+    const isOwner = user.roles.includes("owner") && Number(task.contract_created_by) === Number(user.id);
+    const isContractLead = user.roles.includes("content_lead") && Number(task.lead_id) === Number(user.id);
+    if (!isOwner && !isContractLead) {
+      throw new AppError("Forbidden: You cannot delete this task", 403);
+    }
+  }
 
   const { rowCount } = await pool.query(
     `UPDATE core.tasks SET deleted_at = now(), is_active = false, updated_at = now()
@@ -390,7 +465,7 @@ export const remove = async (id, deletedBy) => {
     try {
       await createNotification(null, {
         recipient_id: task.assigned_to,
-        sender_id: deletedBy || null,
+        sender_id: user.id || null,
         title: "Tugas Dibatalkan/Dihapus",
         message: `Tugas Anda "${task.title}" telah dihapus/dibatalkan dari konten.`,
         source_type: "task",
@@ -400,22 +475,42 @@ export const remove = async (id, deletedBy) => {
       console.error("Failed to send task removal notification:", err.message);
     }
   }
+
+  await syncContentStatus(task.content_id);
 };
 
-export const restore = async (id, restoredBy) => {
+export const restore = async (id, user) => {
+  const { rows: checkRows } = await pool.query(
+    `SELECT t.id, t.assigned_to, ct.created_by AS contract_created_by, ct.lead_by AS lead_id
+     FROM core.tasks t
+     JOIN core.contents c ON c.id = t.content_id
+     JOIN core.contracts ct ON ct.id = c.contract_id
+     WHERE t.id = $1`,
+    [id],
+  );
+  if (!checkRows[0]) throw new AppError("Task tidak ditemukan", 404);
+
+  if (user && !user.roles.includes("superadmin")) {
+    const isOwner = user.roles.includes("owner") && Number(checkRows[0].contract_created_by) === Number(user.id);
+    const isContractLead = user.roles.includes("content_lead") && Number(checkRows[0].lead_id) === Number(user.id);
+    if (!isOwner && !isContractLead) {
+      throw new AppError("Forbidden: You cannot restore this task", 403);
+    }
+  }
+
   const { rows } = await pool.query(
     `UPDATE core.tasks SET is_active = true, deleted_at = NULL, updated_at = now()
      WHERE id = $1 RETURNING id`,
     [id],
   );
   if (!rows[0]) throw new AppError("Task tidak ditemukan", 404);
-  const task = await getById(id);
+  const task = await getById(id, user);
 
   if (task && task.title !== "Persiapan Konten") {
     try {
       await createNotification(null, {
         recipient_id: task.assigned_to,
-        sender_id: restoredBy || null,
+        sender_id: user.id || null,
         title: "Tugas Diaktifkan Kembali",
         message: `Tugas Anda "${task.title}" telah diaktifkan kembali.`,
         source_type: "task",
@@ -428,6 +523,8 @@ export const restore = async (id, restoredBy) => {
       );
     }
   }
+
+  await syncContentStatus(task.content_id);
 
   return task;
 };

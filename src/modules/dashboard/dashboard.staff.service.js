@@ -1,4 +1,4 @@
-import pool from "../../config/database.js";
+import pool from "#config/database.js";
 
 export const getStaffSummary = async (userId) => {
   const { rows } = await pool.query(

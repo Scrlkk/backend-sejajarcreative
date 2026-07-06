@@ -1,0 +1,40 @@
+import { Router } from "express";
+import authRouter from "../modules/auth/auth.routes.js";
+import usersRouter from "../modules/users/users.routes.js";
+import clientsRouter from "../modules/clients/clients.routes.js";
+import platformsRouter from "../modules/platforms/platforms.routes.js";
+import contentCategoryRouter from "../modules/content-types/content-types.routes.js";
+import pillarsRouter from "../modules/pillars/pillars.routes.js";
+import contractsRouter from "../modules/contracts/contracts.routes.js";
+import tasksRouter from "../modules/tasks/tasks.routes.js";
+import contentsRouter from "../modules/contents/contents.routes.js";
+import reviewsRouter from "../modules/reviews/reviews.routes.js";
+import taskOutputsRouter from "../modules/task-outputs/task-outputs.routes.js";
+import taskCommentsRouter from "../modules/task-comments/task-comments.routes.js";
+import analyticsRouter from "../modules/analytics/analytics.routes.js";
+import portfolioRouter from "../modules/portfolio/portfolio.routes.js";
+import activityLogsRouter from "../modules/activity-logs/activity-logs.routes.js";
+import notificationsRouter from "../modules/notifications/notifications.routes.js";
+import dashboardRouter from "../modules/dashboard/dashboard.routes.js";
+
+const apiRouter = Router();
+
+apiRouter.use("/auth", authRouter);
+apiRouter.use("/users", usersRouter);
+apiRouter.use("/clients", clientsRouter);
+apiRouter.use("/platforms", platformsRouter);
+apiRouter.use("/content-categories", contentCategoryRouter);
+apiRouter.use("/pillars", pillarsRouter);
+apiRouter.use("/contracts", contractsRouter);
+apiRouter.use("/tasks", tasksRouter);
+apiRouter.use("/task-outputs", taskOutputsRouter);
+apiRouter.use("/task-comments", taskCommentsRouter);
+apiRouter.use("/contents", contentsRouter);
+apiRouter.use("/reviews", reviewsRouter);
+apiRouter.use("/analytics", analyticsRouter);
+apiRouter.use("/portfolio", portfolioRouter);
+apiRouter.use("/activity-logs", activityLogsRouter);
+apiRouter.use("/notifications", notificationsRouter);
+apiRouter.use("/dashboard", dashboardRouter);
+
+export default apiRouter;

@@ -1,6 +1,7 @@
-import pool from "../../config/database.js";
-import AppError from "../../utils/AppError.js";
-import { paginate } from "../../utils/pagination.js";
+import pool from "#config/database.js";
+import AppError from "#utils/AppError.js";
+import { paginate } from "#utils/pagination.js";
+import { updateByIdWithWhitelist } from "#utils/dbHelper.js";
 
 export const getAll = async (query) => {
   const { limit, offset } = paginate(query);
@@ -48,29 +49,7 @@ export const create = async ({
 };
 
 export const update = async (id, fields) => {
-  const allowedFields = [
-    "client_name",
-    "company_name",
-    "contact_email",
-    "contact_phone",
-  ];
-  const keys = Object.keys(fields).filter((k) => allowedFields.includes(k));
-
-  if (keys.length === 0) {
-    throw new AppError("Tidak ada field valid untuk diupdate", 422);
-  }
-
-  const values = keys.map((k) => fields[k]);
-  const set = keys.map((k, i) => `${k} = $${i + 1}`).join(", ");
-
-  const { rows } = await pool.query(
-    `UPDATE core.clients SET ${set}, updated_at = now()
-     WHERE id = $${keys.length + 1} AND is_active = true AND deleted_at IS NULL
-     RETURNING *`,
-    [...values, id],
-  );
-  if (!rows[0]) throw new AppError("Client not found", 404);
-  return rows[0];
+  return updateByIdWithWhitelist(pool, "core.clients", id, fields);
 };
 
 export const remove = async (id) => {

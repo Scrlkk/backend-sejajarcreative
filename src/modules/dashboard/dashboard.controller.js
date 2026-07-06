@@ -1,9 +1,9 @@
 import * as service from "./dashboard.service.js";
-import { success } from "../../utils/response.js";
+import { success } from "#utils/response.js";
 
 export const getSummary = async (req, res, next) => {
   try {
-    success(res, await service.getSummary(req.user), "Dashboard summary diambil");
+    success(res, await service.getSummary(req.user, req.query.role), "Dashboard summary diambil");
   } catch (e) {
     next(e);
   }

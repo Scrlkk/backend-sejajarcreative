@@ -1,13 +1,13 @@
-import pool from "../../config/database.js";
-import env from "../../config/env.js";
+import pool from "#config/database.js";
+import env from "#config/env.js";
 
-import { compare } from "../../utils/hash.js";
-import { signAccess, signRefresh, verifyRefresh } from "../../utils/jwt.js";
-import AppError from "../../utils/AppError.js";
+import { compare } from "#utils/hash.js";
+import { signAccess, signRefresh, verifyRefresh } from "#utils/jwt.js";
+import AppError from "#utils/AppError.js";
 import {
   fetchRoleNamesByUserId,
   pickPrimaryRole,
-} from "../../utils/userRoles.js";
+} from "#utils/userRoles.js";
 
 const getRefreshTokenExpiresAt = () => {
   const match = env.jwt.refreshExpiresIn.match(/^(\d+)([smhd])$/);

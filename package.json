@@ -4,12 +4,19 @@
   "description": "Backend API Sejajar Content Management System",
   "type": "module",
   "main": "server.js",
+  "imports": {
+    "#config/*": "./src/config/*",
+    "#utils/*": "./src/utils/*",
+    "#middlewares/*": "./src/middlewares/*",
+    "#services/*": "./src/services/*"
+  },
   "scripts": {
     "start": "node server.js",
     "dev": "cross-env NODE_ENV=development nodemon server.js",
     "migrate": "node src/database/migrate.js",
     "migrate:fresh": "node src/database/migrate-fresh.js",
-    "seed": "node src/database/seed.js"
+    "seed": "node src/database/seed.js",
+    "test": "vitest run"
   },
   "keywords": [],
   "author": "",
@@ -28,11 +35,13 @@
     "pg": "^8.20.0",
     "swagger-jsdoc": "^6.2.8",
     "swagger-ui-express": "^5.0.1",
-    "winston": "^3.19.0"
+    "winston": "^3.19.0",
+    "winston-daily-rotate-file": "^5.0.0"
   },
   "devDependencies": {
     "cross-env": "^10.1.0",
-    "nodemon": "^3.1.14"
+    "nodemon": "^3.1.14",
+    "vitest": "^4.1.10"
   },
   "engines": {
     "node": ">=18.0.0"

@@ -1,9 +1,9 @@
 import fs from "fs";
 import path from "path";
-import pool from "../../config/database.js";
-import AppError from "../../utils/AppError.js";
-import { pickPrimaryRole } from "../../utils/userRoles.js";
-import { UPLOAD_DIR } from "../../config/upload.js";
+import pool from "#config/database.js";
+import AppError from "#utils/AppError.js";
+import { pickPrimaryRole } from "#utils/userRoles.js";
+import { UPLOAD_DIR } from "#config/upload.js";
 
 const STORAGE_LIMIT_MB =
   parseInt(process.env.STORAGE_LIMIT_MB, 10) || 2048;
@@ -138,11 +138,14 @@ export const parseDateRange = (query = {}, defaultDays = 30) => {
   return { from, to: end };
 };
 
-export const resolvePrimaryRole = (user) => {
+export const resolvePrimaryRole = (user, queryRole = null) => {
   const roles = user.roles?.length
     ? user.roles
     : user.role
       ? [user.role]
       : [];
+  if (queryRole && roles.includes(queryRole)) {
+    return queryRole;
+  }
   return pickPrimaryRole(roles);
 };

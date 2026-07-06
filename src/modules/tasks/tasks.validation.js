@@ -1,4 +1,5 @@
 import { body } from "express-validator";
+import { TASK_STATUS } from "#config/constants.js";
 
 export const createRules = [
   body("content_id").isInt({ min: 1 }),
@@ -10,14 +11,7 @@ export const createRules = [
 export const updateRules = [
   body("status")
     .optional()
-    .isIn([
-      "to_do",
-      "on_progress",
-      "review",
-      "revision",
-      "approved",
-      "overdue",
-    ]),
+    .isIn(Object.values(TASK_STATUS)),
   body("deadline").optional().isISO8601(),
   body("assigned_to").optional().isInt({ min: 1 }),
 ];

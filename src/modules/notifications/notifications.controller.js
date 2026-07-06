@@ -1,5 +1,5 @@
 import * as service from "./notifications.service.js";
-import { success, created } from "../../utils/response.js";
+import { success, created } from "#utils/response.js";
 
 export const getMyNotifications = async (req, res, next) => {
   try {

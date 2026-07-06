@@ -1,10 +1,10 @@
 import { Router } from "express";
 import * as controller from "./users.controller.js";
 import { createRules, updateRules } from "./users.validation.js";
-import authenticate from "../../middlewares/authenticate.js";
-import authorize from "../../middlewares/authorize.js";
-import validate from "../../middlewares/validate.js";
-import AppError from "../../utils/AppError.js";
+import authenticate from "#middlewares/authenticate.js";
+import authorize from "#middlewares/authorize.js";
+import validate from "#middlewares/validate.js";
+import AppError from "#utils/AppError.js";
 
 const router = Router();
 router.use(authenticate);

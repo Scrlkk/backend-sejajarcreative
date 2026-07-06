@@ -1,4 +1,5 @@
 import AppError from "./AppError.js";
+import pool from "#config/database.js";
 
 export const ALLOWED_UPDATE_FIELDS = {
   "core.users": ["full_name", "email", "password"],
@@ -18,9 +19,6 @@ export const ALLOWED_UPDATE_FIELDS = {
     "company_name",
     "contact_email",
     "contact_phone",
-    // is_active SENGAJA TIDAK ADA — ubah status aktif hanya lewat
-    // endpoint restore (SET is_active=true, deleted_at=NULL)
-    // atau delete (SET is_active=false, deleted_at=now())
   ],
   "core.contents": [
     "title",
@@ -42,6 +40,9 @@ export const ALLOWED_UPDATE_FIELDS = {
   "core.task_outputs": ["caption", "hashtag", "file_url"],
   "core.task_comments": ["message"],
   "core.pillars": ["pillar_name", "description", "is_active"],
+  "core.platforms": ["platform_name", "color_key", "is_active"],
+  "core.content_category": ["type_name", "color_key", "is_active"],
+  "public.portfolio_items": ["is_featured", "display_order"],
 };
 
 export const validateUpdateFields = (table, fields) => {
@@ -58,13 +59,30 @@ export const validateUpdateFields = (table, fields) => {
   return keys;
 };
 
+export const TABLES_WITH_UPDATED_AT = [
+  "core.users",
+  "core.contracts",
+  "core.tasks",
+  "core.clients",
+  "core.contents",
+  "core.content_reviews",
+  "core.pillars",
+  "core.platforms",
+  "core.content_category",
+  "public.portfolio_items",
+];
+
 export const buildUpdateQuery = (table, id, fields) => {
   const keys = validateUpdateFields(table, fields);
   const values = keys.map((k) => fields[k]);
-  const set = keys.map((k, i) => `${k} = $${i + 1}`).join(", ");
+  let set = keys.map((k, i) => `${k} = $${i + 1}`).join(", ");
+
+  if (TABLES_WITH_UPDATED_AT.includes(table)) {
+    set += ", updated_at = now()";
+  }
 
   return {
-    sql: `UPDATE ${table} SET ${set}, updated_at = now() WHERE id = $${keys.length + 1} RETURNING *`,
+    sql: `UPDATE ${table} SET ${set} WHERE id = $${keys.length + 1} RETURNING *`,
     params: [...values, id],
   };
 };
@@ -83,4 +101,19 @@ export const updateByIdWithWhitelist = async (pool, table, id, fields) => {
 export const isFieldAllowed = (table, field) => {
   const allowed = ALLOWED_UPDATE_FIELDS[table];
   return allowed ? allowed.includes(field) : false;
+};
+
+export const runInTransaction = async (action, dbPool = pool) => {
+  const client = await dbPool.connect();
+  try {
+    await client.query("BEGIN");
+    const result = await action(client);
+    await client.query("COMMIT");
+    return result;
+  } catch (err) {
+    await client.query("ROLLBACK");
+    throw err;
+  } finally {
+    client.release();
+  }
 };

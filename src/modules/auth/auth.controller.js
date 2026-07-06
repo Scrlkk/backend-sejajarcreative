@@ -1,5 +1,5 @@
 import * as authService from "./auth.service.js";
-import { success } from "../../utils/response.js";
+import { success } from "#utils/response.js";
 import { checkAndCreateContractNotifications } from "../notifications/notifications.service.js";
 
 const getExtra = (req) => ({

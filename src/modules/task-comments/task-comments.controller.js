@@ -1,5 +1,5 @@
 import * as service from "./task-comments.service.js";
-import { success, created } from "../../utils/response.js";
+import { success, created } from "#utils/response.js";
 
 export const getByTask = async (req, res, next) => {
   try {

@@ -1,16 +1,18 @@
-import pool from "../../config/database.js";
+import pool from "#config/database.js";
 import { parseDateRange } from "./dashboard.helpers.js";
 
 const ACTIVE_CONTENT = `c.deleted_at IS NULL AND c.is_active = true`;
 
-export const getContentLeadSummary = async () => {
+export const getContentLeadSummary = async (leadId) => {
   const [contractsResult, contentsResult] = await Promise.all([
     pool.query(
       `SELECT COUNT(*)::int AS active
        FROM core.contracts
        WHERE status = 'active'
          AND is_active = true
-         AND deleted_at IS NULL`,
+         AND deleted_at IS NULL
+         AND lead_by = $1`,
+      [leadId],
     ),
     pool.query(
       `SELECT
@@ -20,7 +22,9 @@ export const getContentLeadSummary = async () => {
        FROM core.contents c
        JOIN core.contracts co ON co.id = c.contract_id
        WHERE c.deleted_at IS NULL AND c.is_active = true
-         AND co.deleted_at IS NULL AND co.is_active = true`,
+         AND co.deleted_at IS NULL AND co.is_active = true
+         AND co.lead_by = $1`,
+      [leadId],
     ),
   ]);
 
@@ -38,22 +42,27 @@ export const getContentLeadSummary = async () => {
   };
 };
 
-export const getContentTimelineChart = async (query) => {
+export const getContentTimelineChart = async (leadId, query) => {
   const { from, to } = parseDateRange(query);
   const limit = Math.min(Math.max(parseInt(query.limit, 10) || 50, 1), 100);
 
-  const { rows } = await pool.query(
-    `SELECT c.id, c.status, c.created_at
+  let sql = `SELECT c.id, c.status, c.created_at
      FROM core.contents c
      JOIN core.contracts co ON co.id = c.contract_id
      WHERE c.deleted_at IS NULL AND c.is_active = true
        AND co.deleted_at IS NULL AND co.is_active = true
        AND c.created_at >= $1
-       AND c.created_at < $2
-     ORDER BY c.created_at DESC
-     LIMIT $3`,
-    [from, to, limit],
-  );
+       AND c.created_at < $2`;
+  const params = [from, to];
+  let idx = 3;
+  if (leadId) {
+    sql += ` AND co.lead_by = $${idx++}`;
+    params.push(leadId);
+  }
+  sql += ` ORDER BY c.created_at DESC LIMIT $${idx}`;
+  params.push(limit);
+
+  const { rows } = await pool.query(sql, params);
 
   return {
     metric: "content_timeline",
@@ -63,11 +72,10 @@ export const getContentTimelineChart = async (query) => {
   };
 };
 
-export const getContentByStatusDateChart = async (query) => {
+export const getContentByStatusDateChart = async (leadId, query) => {
   const { from, to } = parseDateRange(query);
 
-  const { rows } = await pool.query(
-    `SELECT
+  let sql = `SELECT
        DATE(c.created_at) AS date,
        c.status,
        COUNT(*)::int AS count
@@ -76,11 +84,15 @@ export const getContentByStatusDateChart = async (query) => {
      WHERE c.deleted_at IS NULL AND c.is_active = true
        AND co.deleted_at IS NULL AND co.is_active = true
        AND c.created_at >= $1
-       AND c.created_at < $2
-     GROUP BY DATE(c.created_at), c.status
-     ORDER BY date ASC, c.status ASC`,
-    [from, to],
-  );
+       AND c.created_at < $2`;
+  const params = [from, to];
+  if (leadId) {
+    sql += ` AND co.lead_by = $3`;
+    params.push(leadId);
+  }
+  sql += ` GROUP BY DATE(c.created_at), c.status ORDER BY date ASC, c.status ASC`;
+
+  const { rows } = await pool.query(sql, params);
 
   const byDate = new Map();
 
@@ -114,9 +126,8 @@ export const getContentByStatusDateChart = async (query) => {
   };
 };
 
-export const getPillarsUsageChart = async () => {
-  const { rows } = await pool.query(
-    `SELECT
+export const getPillarsUsageChart = async (leadId) => {
+  let sql = `SELECT
        p.id,
        p.pillar_name,
        COUNT(c.id)::int AS count
@@ -128,12 +139,19 @@ export const getPillarsUsageChart = async () => {
          SELECT 1 FROM core.contracts co
          WHERE co.id = c.contract_id
            AND co.deleted_at IS NULL
-           AND co.is_active = true
+           AND co.is_active = true`;
+  const params = [];
+  if (leadId) {
+    sql += ` AND co.lead_by = $1`;
+    params.push(leadId);
+  }
+  sql += `
        )
      WHERE p.is_active = true
      GROUP BY p.id, p.pillar_name
-     ORDER BY count DESC, p.pillar_name ASC`,
-  );
+     ORDER BY count DESC, p.pillar_name ASC`;
+
+  const { rows } = await pool.query(sql, params);
 
   const total = rows.reduce((sum, row) => sum + row.count, 0);
 
@@ -153,21 +171,23 @@ export const getPillarsUsageChart = async () => {
   };
 };
 
-export const getReviewsListWidget = async (query = {}) => {
+export const getReviewsListWidget = async (leadId, query = {}) => {
   const limit = Math.min(Math.max(parseInt(query.limit, 10) || 20, 1), 50);
 
-  const [countResult, listResult] = await Promise.all([
-    pool.query(
-      `SELECT COUNT(cr.id)::int AS total
+  let countSql = `SELECT COUNT(cr.id)::int AS total
        FROM core.content_reviews cr
        JOIN core.contents c ON c.id = cr.content_id
        JOIN core.contracts co ON co.id = c.contract_id
        WHERE cr.deleted_at IS NULL
          AND c.deleted_at IS NULL AND c.is_active = true
-         AND co.deleted_at IS NULL AND co.is_active = true`,
-    ),
-    pool.query(
-      `SELECT
+         AND co.deleted_at IS NULL AND co.is_active = true`;
+  const countParams = [];
+  if (leadId) {
+    countSql += ` AND co.lead_by = $1`;
+    countParams.push(leadId);
+  }
+
+  let listSql = `SELECT
          cr.id,
          cr.content_id,
          c.contract_id,
@@ -183,11 +203,19 @@ export const getReviewsListWidget = async (query = {}) => {
        JOIN core.users u ON u.id = cr.reviewer_id
        WHERE cr.deleted_at IS NULL
          AND c.deleted_at IS NULL AND c.is_active = true
-         AND co.deleted_at IS NULL AND co.is_active = true
-       ORDER BY cr.created_at DESC
-       LIMIT $1`,
-      [limit],
-    ),
+         AND co.deleted_at IS NULL AND co.is_active = true`;
+  const listParams = [];
+  let idx = 1;
+  if (leadId) {
+    listSql += ` AND co.lead_by = $${idx++}`;
+    listParams.push(leadId);
+  }
+  listSql += ` ORDER BY cr.created_at DESC LIMIT $${idx}`;
+  listParams.push(limit);
+
+  const [countResult, listResult] = await Promise.all([
+    pool.query(countSql, countParams),
+    pool.query(listSql, listParams),
   ]);
 
   return {
