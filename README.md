@@ -79,7 +79,51 @@ express-sejajar/
 
 ---
 
-## ⚙️ Persyaratan Sistem & Instalasi
+## 🐳 Menjalankan dengan Docker (Rekomendasi & Instan)
+
+Cara termudah dan tercepat untuk menjalankan seluruh ekosistem Sejajar (Backend, Frontend, dan Database PostgreSQL) secara bersamaan tanpa perlu mengonfigurasi database lokal atau mengaktifkan Laragon:
+
+### 📋 Prasyarat Menjalankan Docker
+
+1. Pastikan **Docker Desktop** sudah aktif berjalan di komputer Anda.
+
+2. Matikan **Laragon** (atau database PostgreSQL lokal lainnya) untuk membebaskan port `5432`, `3000`, dan `5173`.
+
+### 🚀 Cara Menjalankan
+
+1. Buka terminal di root direktori backend (`express-sejajar`):
+
+   ```bash
+   docker compose up -d
+   ```
+
+   *(Untuk pertama kali atau jika ada perubahan dependensi, jalankan dengan build: `docker compose up -d --build`)*
+
+2. Aplikasi siap diakses di peramban Anda:
+
+   - **Frontend (React)**: [http://localhost:5173](http://localhost:5173)
+   - **Backend API (Swagger Docs)**: [http://localhost:3000/api/docs](http://localhost:3000/api/docs)
+
+3. **Menjalankan Migrasi & Seeder Database**:
+   Secara default, kontainer backend akan menjalankan migrasi otomatis saat menyala pertama kali. Jika Anda ingin melakukan reset database secara paksa (*migrate fresh*):
+
+   ```bash
+   docker compose exec backend npm run migrate:fresh
+   ```
+
+### 🛑 Cara Menghentikan
+
+Untuk mematikan seluruh kontainer secara aman:
+
+```bash
+docker compose down
+```
+
+*(Data database Anda tetap tersimpan aman di volume lokal `pgdata`).*
+
+---
+
+## ⚙️ Persyaratan Sistem & Instalasi Lokal (Tanpa Docker)
 
 ### 📋 Prasyarat
 
