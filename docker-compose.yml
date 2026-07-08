@@ -1,10 +1,11 @@
+name: sejajar
 
 services:
   # 1. Database Service (PostgreSQL)
   postgres-db:
     image: postgres:15-alpine
     container_name: sejajar-postgres
-    restart: no
+    restart: unless-stopped
     environment:
       POSTGRES_USER: ${DB_USER:-postgres}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
@@ -25,7 +26,7 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: sejajar-backend
-    restart: no
+    restart: unless-stopped
     ports:
       - "3000:3000"
     env_file:
@@ -47,7 +48,7 @@ services:
       context: ../react-sejajar
       dockerfile: Dockerfile
     container_name: sejajar-frontend
-    restart: no
+    restart: unless-stopped
     ports:
       - "5173:5173"
     environment:
