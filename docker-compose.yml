@@ -1,21 +1,21 @@
-version: '3.8'
+version: "3.8"
 
 services:
   # 1. Database Service (PostgreSQL)
   postgres-db:
     image: postgres:15-alpine
     container_name: sejajar-postgres
-    restart: always
+    restart: no
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: secretpassword
-      POSTGRES_DB: db_sejajar
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
     ports:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d db_sejajar"]
+      test: ["CMD-SHELL", "pg_isready -U $${DB_USER:-postgres} -d $${DB_NAME}"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -26,27 +26,14 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: sejajar-backend
-    restart: always
+    restart: no
     ports:
       - "3000:3000"
+    env_file:
+      - .env
     environment:
-      - NODE_ENV=development
-      - PORT=3000
       - DB_HOST=postgres-db
       - DB_PORT=5432
-      - DB_NAME=db_sejajar
-      - DB_USER=postgres
-      - DB_PASSWORD=secretpassword
-      - JWT_SECRET=0c45a548519ce760dc277d6196cd5a5ad4259cc17b3a3318b2ea5b03cbf1e4d5
-      - JWT_EXPIRES_IN=24h
-      - JWT_REFRESH_SECRET=34c616237a333b3306c4777ee2ef6dd571b6065a84f67b7096e74ddc92be397f
-      - JWT_REFRESH_EXPIRES_IN=30d
-      - BCRYPT_ROUNDS=12
-      - CORS_ORIGIN=http://localhost:3000,http://localhost:5173
-      - LOG_LEVEL=info
-      - UPLOAD_DIR=./uploads
-      - MAX_FILE_SIZE=52428800
-      - STORAGE_LIMIT_MB=2048
     volumes:
       - .:/app
       - /app/node_modules
@@ -61,11 +48,11 @@ services:
       context: ../react-sejajar
       dockerfile: Dockerfile
     container_name: sejajar-frontend
-    restart: always
+    restart: no
     ports:
       - "5173:5173"
     environment:
-      - VITE_API_URL=http://localhost:3000
+      - VITE_API_URL=${VITE_API_URL:-http://localhost:3000}
     volumes:
       - ../react-sejajar:/app
       - /app/node_modules
