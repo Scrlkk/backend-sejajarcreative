@@ -157,7 +157,12 @@ export const getAll = async (query, user) => {
 
   // Scoping check for non-superadmins
   if (user && !user.roles.includes("superadmin")) {
-    sql += ` AND (t.assigned_to = $${idx} OR ct.lead_by = $${idx} OR ct.created_by = $${idx})`;
+    sql += ` AND (
+      t.assigned_to = $${idx} 
+      OR ct.lead_by = $${idx} 
+      OR ct.created_by = $${idx}
+      OR EXISTS (SELECT 1 FROM core.contract_teams ct_t WHERE ct_t.contract_id = c.contract_id AND ct_t.user_id = $${idx})
+    )`;
     params.push(user.id);
     idx++;
   }
@@ -176,7 +181,6 @@ export const getById = async (id, user) => {
   const task = rows[0];
   if (!task) throw new AppError("Task not found", 404);
 
-  // Scoping check for non-superadmins
   if (user && !user.roles.includes("superadmin")) {
     if (
       Number(task.assigned_to) !== Number(user.id) &&
@@ -205,9 +209,8 @@ export const create = async (
   if (!content) throw new AppError("Content not found", 404);
 
   if (createdBy && !createdBy.roles.includes("superadmin")) {
-    const isOwner = createdBy.roles.includes("owner") && Number(content.contract_created_by) === Number(createdBy.id);
     const isContractLead = createdBy.roles.includes("content_lead") && Number(content.contract_lead_by) === Number(createdBy.id);
-    if (!isOwner && !isContractLead) {
+    if (!isContractLead) {
       throw new AppError("Forbidden: You cannot create tasks for this content", 403);
     }
   }
@@ -447,9 +450,8 @@ export const remove = async (id, user) => {
   const task = await getById(id, user);
 
   if (user && !user.roles.includes("superadmin")) {
-    const isOwner = user.roles.includes("owner") && Number(task.contract_created_by) === Number(user.id);
     const isContractLead = user.roles.includes("content_lead") && Number(task.lead_id) === Number(user.id);
-    if (!isOwner && !isContractLead) {
+    if (!isContractLead) {
       throw new AppError("Forbidden: You cannot delete this task", 403);
     }
   }
@@ -491,9 +493,8 @@ export const restore = async (id, user) => {
   if (!checkRows[0]) throw new AppError("Task tidak ditemukan", 404);
 
   if (user && !user.roles.includes("superadmin")) {
-    const isOwner = user.roles.includes("owner") && Number(checkRows[0].contract_created_by) === Number(user.id);
     const isContractLead = user.roles.includes("content_lead") && Number(checkRows[0].lead_id) === Number(user.id);
-    if (!isOwner && !isContractLead) {
+    if (!isContractLead) {
       throw new AppError("Forbidden: You cannot restore this task", 403);
     }
   }

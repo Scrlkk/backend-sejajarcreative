@@ -73,23 +73,6 @@ app.get("/api/docs.json", (req, res) => {
   res.send(swaggerSpec);
 });
 
-app.use((req, res, next) => {
-  const start = Date.now();
-  res.on("finish", () => {
-    const duration = Date.now() - start;
-    const logLevel = res.statusCode >= 400 ? "warn" : "info";
-    logger[logLevel]({
-      method: req.method,
-      path: req.path,
-      status: res.statusCode,
-      duration: `${duration}ms`,
-      user_id: req.user?.id || "anonymous",
-      ip: req.ip,
-    });
-  });
-  next();
-});
-
 app.use(
   morgan(process.env.NODE_ENV === "production" ? "combined" : "dev", {
     stream: {

@@ -71,9 +71,9 @@ export const getChartByMetric = async (user, role, query) => {
 
   switch (metric) {
     case "engagement":
-      return ownerCharts.getEngagementChart(scopeId, query);
+      return ownerCharts.getEngagementChart(user, role, query);
     case "engagement_by_platform":
-      return ownerCharts.getEngagementByPlatformChart(scopeId, query);
+      return ownerCharts.getEngagementByPlatformChart(user, role, query);
     case "contracts_revenue":
       return ownerCharts.getContractsRevenueChart(scopeId, query);
     case "contracts_by_status":
@@ -89,11 +89,11 @@ export const getChartByMetric = async (user, role, query) => {
     case "clients_by_completed_contracts":
       return ownerCharts.getClientsByCompletedContractsChart(scopeId);
     case "content_timeline":
-      return contentLeadService.getContentTimelineChart(scopeId, query);
+      return contentLeadService.getContentTimelineChart(user, role, query);
     case "content_by_status_date":
-      return contentLeadService.getContentByStatusDateChart(scopeId, query);
+      return contentLeadService.getContentByStatusDateChart(user, role, query);
     case "pillars_usage":
-      return contentLeadService.getPillarsUsageChart(scopeId);
+      return contentLeadService.getPillarsUsageChart(user, role);
     case "tasks_by_status":
       // superadmin: null → semua task; staff: userId → task miliknya
       return staffService.getTasksByStatusChart(role === "superadmin" ? null : user.id);

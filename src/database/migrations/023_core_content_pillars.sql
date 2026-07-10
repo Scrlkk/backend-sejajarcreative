@@ -1,4 +1,3 @@
--- Junction table: one content can belong to many pillars
 CREATE TABLE IF NOT EXISTS core.content_pillars (
   content_id INT NOT NULL,
   pillar_id  INT NOT NULL,

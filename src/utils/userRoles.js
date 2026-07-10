@@ -21,18 +21,6 @@ export const fetchRoleNamesByUserId = async (userId, db = pool) => {
   return rows.map((r) => r.role_name);
 };
 
-export const fetchRoleNamesByEmail = async (email, db = pool) => {
-  const { rows } = await db.query(
-    `SELECT r.role_name
-     FROM core.users u
-     JOIN core.user_roles ur ON ur.user_id = u.id
-     JOIN core.roles r ON r.id = ur.role_id
-     WHERE u.email = $1`,
-    [email],
-  );
-  return rows.map((r) => r.role_name);
-};
-
 export const pickPrimaryRole = (roles) => {
   if (!roles?.length) return null;
   for (const name of ROLE_PRIORITY) {

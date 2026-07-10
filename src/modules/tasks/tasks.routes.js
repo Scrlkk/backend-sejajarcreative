@@ -100,7 +100,6 @@ router.post(
   "/",
   authorize(
     "superadmin",
-    "owner",
     "content_lead",
     "content_editor",
     "script_writer",
@@ -275,12 +274,12 @@ router.put(
 );
 router.delete(
   "/:id",
-  authorize("superadmin", "owner", "content_lead"),
+  authorize("superadmin", "content_lead"),
   controller.remove,
 );
 router.post(
   "/:id/restore",
-  authorize("superadmin", "owner", "content_lead"),
+  authorize("superadmin", "content_lead"),
   controller.restore,
 );
 

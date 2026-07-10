@@ -42,8 +42,6 @@ const selectContractsBase = `
   JOIN core.users u2 ON u2.id = c.lead_by
 `;
 
-const notDeleted = "c.deleted_at IS NULL AND c.is_active = true";
-
 const syncPlatforms = async (client, contractId, platformIds) => {
   if (!Array.isArray(platformIds)) return;
   await client.query(
@@ -256,6 +254,12 @@ export const update = async (id, fields, user) => {
       const isContractLead = user.roles.includes("content_lead") && Number(existing.lead_by) === Number(user.id);
       if (!isOwner && !isContractLead) {
         throw new AppError("Forbidden: You cannot modify this contract", 403);
+      }
+      if (isContractLead && !isOwner) {
+        const hasOtherFields = keys.length > 0 || platform_ids !== undefined;
+        if (hasOtherFields) {
+          throw new AppError("Forbidden: Content Lead can only update the creative team (team_user_ids) of this contract", 403);
+        }
       }
     }
 

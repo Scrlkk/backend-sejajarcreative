@@ -40,11 +40,15 @@ export const create = async (data, user) => {
   const isSuperadmin = userRoles.includes("superadmin");
   const isAssignee = Number(task.assigned_to) === Number(user.id);
 
-  if (!isAssignee && !isSuperadmin) {
+  const isContentLeadOrOwner = userRoles.some((r) =>
+    ["content_lead", "owner"].includes(r)
+  );
+
+  if (!isAssignee && !isSuperadmin && !isContentLeadOrOwner) {
     throw new AppError("Forbidden: Only the task assignee can submit task outputs", 403);
   }
 
-  if (task.status === "approved") {
+  if (task.status === "approved" && !isSuperadmin && !userRoles.includes("admin_social_media") && !isContentLeadOrOwner) {
     throw new AppError("Forbidden: Cannot submit outputs for an approved task", 403);
   }
 
@@ -116,4 +120,44 @@ export const remove = async (id, user) => {
       [taskOutput.task_id],
     );
   }
+};
+
+export const update = async (id, data, user) => {
+  const { rows } = await pool.query(
+    `SELECT t_out.*, t.assigned_to
+     FROM core.task_outputs t_out
+     JOIN core.tasks t ON t.id = t_out.task_id
+     WHERE t_out.id = $1 AND t_out.deleted_at IS NULL`,
+    [id],
+  );
+
+  if (!rows[0]) throw new AppError("Task output not found", 404);
+
+  const taskOutput = rows[0];
+  const userRoles = user.roles?.length ? user.roles : user.role ? [user.role] : [];
+  const isSuperadmin = userRoles.includes("superadmin");
+  const isAssignee = Number(taskOutput.assigned_to) === Number(user.id);
+  const isLeadOrAdmin = userRoles.some((r) => ["content_lead", "owner", "admin_social_media"].includes(r));
+
+  if (!isAssignee && !isSuperadmin && !isLeadOrAdmin) {
+    throw new AppError("Forbidden", 403);
+  }
+
+  const fields = [];
+  const values = [];
+  let idx = 1;
+
+  if (data.caption !== undefined) { fields.push(`caption = $${idx++}`); values.push(data.caption); }
+  if (data.hashtag !== undefined) { fields.push(`hashtag = $${idx++}`); values.push(data.hashtag); }
+
+  if (fields.length === 0) throw new AppError("No fields to update", 400);
+
+  values.push(id);
+
+  const { rows: updated } = await pool.query(
+    `UPDATE core.task_outputs SET ${fields.join(", ")} WHERE id = $${idx} AND deleted_at IS NULL RETURNING *`,
+    values,
+  );
+
+  return updated[0];
 };

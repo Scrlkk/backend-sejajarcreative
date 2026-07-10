@@ -14,11 +14,43 @@ const calcEngagementRate = (views, likes, comments, shares) => {
   return Math.round(((Number(likes || 0) + Number(comments || 0) + Number(shares || 0)) / views) * 1000) / 10;
 };
 
-export const getEngagementChart = async (ownerId, query) => {
-  const { from, to } = parseDateRange(query);
+export const getEngagementChart = async (userOrOwnerId, roleOrQuery, optionalQuery) => {
+  let user = null;
+  let role = null;
+  let queryObj = roleOrQuery;
+
+  if (typeof userOrOwnerId === "object" && userOrOwnerId !== null) {
+    user = userOrOwnerId;
+    role = roleOrQuery;
+    queryObj = optionalQuery;
+  } else {
+    const ownerId = userOrOwnerId;
+    if (ownerId) {
+      user = { id: ownerId };
+      role = "owner";
+    }
+  }
+
+  const { from, to } = parseDateRange(queryObj);
   const duration = to.getTime() - from.getTime();
   const prevFrom = new Date(from.getTime() - duration);
   const prevTo = from;
+
+  let scopeCondition = "";
+  let scopeParam = null;
+
+  if (user && role) {
+    if (role === "owner") {
+      scopeCondition = " AND co.created_by = $3";
+      scopeParam = user.id;
+    } else if (role === "content_lead") {
+      scopeCondition = " AND co.lead_by = $3";
+      scopeParam = user.id;
+    } else if (role === "admin_social_media") {
+      scopeCondition = " AND EXISTS (SELECT 1 FROM core.tasks t WHERE t.content_id = c.id AND t.assigned_to = $3 AND t.deleted_at IS NULL)";
+      scopeParam = user.id;
+    }
+  }
 
   let totalsSql = `SELECT
          COALESCE(SUM(e.views), 0)::int AS views,
@@ -32,9 +64,9 @@ export const getEngagementChart = async (ownerId, query) => {
          AND c.deleted_at IS NULL AND c.is_active = true
          AND co.deleted_at IS NULL AND co.is_active = true`;
   const totalsParams = [from, to];
-  if (ownerId) {
-    totalsSql += ` AND co.created_by = $3`;
-    totalsParams.push(ownerId);
+  if (scopeParam !== null) {
+    totalsSql += scopeCondition;
+    totalsParams.push(scopeParam);
   }
 
   let seriesSql = `SELECT
@@ -50,9 +82,9 @@ export const getEngagementChart = async (ownerId, query) => {
          AND c.deleted_at IS NULL AND c.is_active = true
          AND co.deleted_at IS NULL AND co.is_active = true`;
   const seriesParams = [from, to];
-  if (ownerId) {
-    seriesSql += ` AND co.created_by = $3`;
-    seriesParams.push(ownerId);
+  if (scopeParam !== null) {
+    seriesSql += scopeCondition;
+    seriesParams.push(scopeParam);
   }
   seriesSql += ` GROUP BY DATE(e.recorded_at) ORDER BY date ASC`;
 
@@ -68,9 +100,9 @@ export const getEngagementChart = async (ownerId, query) => {
          AND c.deleted_at IS NULL AND c.is_active = true
          AND co.deleted_at IS NULL AND co.is_active = true`;
   const prevTotalsParams = [prevFrom, prevTo];
-  if (ownerId) {
-    prevTotalsSql += ` AND co.created_by = $3`;
-    prevTotalsParams.push(ownerId);
+  if (scopeParam !== null) {
+    prevTotalsSql += scopeCondition;
+    prevTotalsParams.push(scopeParam);
   }
 
   const [totalsResult, seriesResult, prevTotalsResult] = await Promise.all([
@@ -120,15 +152,31 @@ export const getEngagementChart = async (ownerId, query) => {
   };
 };
 
-export const getEngagementByPlatformChart = async (ownerId, query) => {
-  const { from, to } = parseDateRange(query);
+export const getEngagementByPlatformChart = async (userOrOwnerId, roleOrQuery, optionalQuery) => {
+  let user = null;
+  let role = null;
+  let queryObj = roleOrQuery;
 
-  const chartMetric = ["views", "likes", "comments", "shares"].includes(query.chartMetric)
-    ? query.chartMetric
+  if (typeof userOrOwnerId === "object" && userOrOwnerId !== null) {
+    user = userOrOwnerId;
+    role = roleOrQuery;
+    queryObj = optionalQuery;
+  } else {
+    const ownerId = userOrOwnerId;
+    if (ownerId) {
+      user = { id: ownerId };
+      role = "owner";
+    }
+  }
+
+  const { from, to } = parseDateRange(queryObj);
+
+  const chartMetric = ["views", "likes", "comments", "shares"].includes(queryObj.chartMetric)
+    ? queryObj.chartMetric
     : "views";
 
-  const granularity = ["daily", "weekly", "monthly"].includes(query.granularity)
-    ? query.granularity
+  const granularity = ["daily", "weekly", "monthly"].includes(queryObj.granularity)
+    ? queryObj.granularity
     : "daily";
 
   let dateField = `DATE(e.recorded_at)`;
@@ -136,6 +184,22 @@ export const getEngagementByPlatformChart = async (ownerId, query) => {
     dateField = `DATE_TRUNC('week', e.recorded_at)`;
   } else if (granularity === "monthly") {
     dateField = `DATE_TRUNC('month', e.recorded_at)`;
+  }
+
+  let scopeCondition = "";
+  let scopeParam = null;
+
+  if (user && role) {
+    if (role === "owner") {
+      scopeCondition = " AND co.created_by = $3";
+      scopeParam = user.id;
+    } else if (role === "content_lead") {
+      scopeCondition = " AND co.lead_by = $3";
+      scopeParam = user.id;
+    } else if (role === "admin_social_media") {
+      scopeCondition = " AND EXISTS (SELECT 1 FROM core.tasks t WHERE t.content_id = c.id AND t.assigned_to = $3 AND t.deleted_at IS NULL)";
+      scopeParam = user.id;
+    }
   }
 
   // Fetch all active platforms
@@ -162,21 +226,36 @@ export const getEngagementByPlatformChart = async (ownerId, query) => {
        AND c.deleted_at IS NULL AND c.is_active = true
        AND co.deleted_at IS NULL AND co.is_active = true`;
   const seriesParams = [from, to];
-  if (ownerId) {
-    seriesSql += ` AND co.created_by = $3`;
-    seriesParams.push(ownerId);
+  if (scopeParam !== null) {
+    seriesSql += scopeCondition;
+    seriesParams.push(scopeParam);
   }
   seriesSql += ` GROUP BY date, p.id, p.platform_name, p.color_key ORDER BY date ASC, p.platform_name ASC`;
 
   // Fetch milestone events (contracts launched in this period)
   let milestonesSql = `SELECT contract_name, DATE(created_at) AS date
-     FROM core.contracts
+     FROM core.contracts co
      WHERE created_at >= $1 AND created_at < $2
        AND deleted_at IS NULL AND is_active = true`;
   const milestonesParams = [from, to];
-  if (ownerId) {
-    milestonesSql += ` AND created_by = $3`;
-    milestonesParams.push(ownerId);
+  if (scopeParam !== null) {
+    // For milestones, we filter based on contract access
+    if (role === "owner") {
+      milestonesSql += " AND co.created_by = $3";
+      milestonesParams.push(scopeParam);
+    } else if (role === "content_lead") {
+      milestonesSql += " AND co.lead_by = $3";
+      milestonesParams.push(scopeParam);
+    } else if (role === "admin_social_media") {
+      // Contracts where admin social media is a staff or has task assignments
+      milestonesSql += ` AND EXISTS (
+        SELECT 1 FROM core.tasks t 
+        WHERE t.content_id IN (SELECT id FROM core.contents WHERE contract_id = co.id)
+          AND t.assigned_to = $3 
+          AND t.deleted_at IS NULL
+      )`;
+      milestonesParams.push(scopeParam);
+    }
   }
   milestonesSql += ` ORDER BY created_at ASC LIMIT 5`;
 

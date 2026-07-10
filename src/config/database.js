@@ -4,6 +4,8 @@ import logger from "./logger.js";
 
 // Parse DATE (OID 1082) as raw string to avoid timezone offset shifts
 pg.types.setTypeParser(1082, (val) => val);
+// Parse TIMESTAMP (OID 1114) as raw string to avoid timezone offset shifts
+pg.types.setTypeParser(1114, (val) => val);
 
 const { Pool } = pg;
 

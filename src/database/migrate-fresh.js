@@ -5,7 +5,6 @@ import path from "path";
 import { fileURLToPath } from "url";
 import env from "#config/env.js";
 
-// Pengganti __dirname di ES Module
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -21,8 +20,6 @@ const pool = new Pool({
 
 const MIGRATIONS_DIR = path.join(__dirname, "migrations");
 const SEEDS_DIR = path.join(__dirname, "seeds");
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const runSqlFiles = async (client, dir, trackingTable, label) => {
   const files = fs
@@ -67,8 +64,6 @@ const runSqlFiles = async (client, dir, trackingTable, label) => {
   return count;
 };
 
-// ─── Main ─────────────────────────────────────────────────────────────────────
-
 const run = async () => {
   const client = await pool.connect();
 
@@ -83,10 +78,8 @@ const run = async () => {
   console.log("");
 
   try {
-    // ── Drop semua objects (CASCADE) ─────────────────────────────
     console.log("🗑️  Dropping all objects...");
 
-    // Drop tables dengan CASCADE
     await client.query(`
       DO $$ DECLARE
         r RECORD;
@@ -103,7 +96,6 @@ const run = async () => {
       END $$;
     `);
 
-    // Drop types/enums
     await client.query(`
       DO $$ DECLARE
         r RECORD;
@@ -120,7 +112,6 @@ const run = async () => {
       END $$;
     `);
 
-    // Drop custom schemas (tapi keep public dan system schemas)
     await client.query(`
       DO $$ DECLARE
         r RECORD;
@@ -139,14 +130,12 @@ const run = async () => {
     console.log("  ✅ All objects dropped");
     console.log("");
 
-    // ── Drop tracking tables ────────────────────────────────────
     console.log("🔄 Resetting tracking tables...");
     await client.query("DROP TABLE IF EXISTS public.migrations");
     await client.query("DROP TABLE IF EXISTS public.seeds");
     console.log("  ✅ Tracking tables reset");
     console.log("");
 
-    // ── Buat tabel tracking migrasi ─────────────────────────────
     await client.query(`
       CREATE TABLE IF NOT EXISTS public.migrations (
         id         SERIAL PRIMARY KEY,
@@ -155,7 +144,6 @@ const run = async () => {
       )
     `);
 
-    // Buat tabel tracking seeds
     await client.query(`
       CREATE TABLE IF NOT EXISTS public.seeds (
         id         SERIAL PRIMARY KEY,
@@ -164,7 +152,6 @@ const run = async () => {
       )
     `);
 
-    // ── Jalankan migrations ──────────────────────────────────────
     console.log("📦 Migrations:");
     const migrCount = await runSqlFiles(
       client,
@@ -175,7 +162,6 @@ const run = async () => {
 
     console.log("");
 
-    // ── Jalankan seeds (hanya jika bukan production) ─────────────
     if (env.nodeEnv !== "production") {
       console.log("🌱 Seeds:");
       const seedCount = await runSqlFiles(client, SEEDS_DIR, "seeds", "seed");

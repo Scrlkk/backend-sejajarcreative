@@ -106,7 +106,6 @@ router.post(
   "/",
   authorize(
     "superadmin",
-    "owner",
     "content_lead",
     "content_editor",
     "script_writer",
@@ -248,7 +247,7 @@ router.post(
  */
 router.patch(
   "/:id/publish",
-  authorize("superadmin", "owner", "content_lead", "admin_social_media"),
+  authorize("superadmin", "content_lead", "admin_social_media"),
   controller.publish,
 );
 

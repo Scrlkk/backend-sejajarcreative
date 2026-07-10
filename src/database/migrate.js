@@ -5,7 +5,6 @@ import path from "path";
 import { fileURLToPath } from "url";
 import env from "#config/env.js";
 
-// Pengganti __dirname di ES Module
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -21,8 +20,6 @@ const pool = new Pool({
 
 const MIGRATIONS_DIR = path.join(__dirname, "migrations");
 const SEEDS_DIR = path.join(__dirname, "seeds");
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const runSqlFiles = async (client, dir, trackingTable, label) => {
   const files = fs
@@ -60,14 +57,12 @@ const runSqlFiles = async (client, dir, trackingTable, label) => {
       await client.query("ROLLBACK");
       console.error(`  ❌ Failed   [${label}] : ${file}`);
       console.error(`              Error   : ${err.message}`);
-      throw err; // hentikan proses
+      throw err;
     }
   }
 
   return count;
 };
-
-// ─── Main ─────────────────────────────────────────────────────────────────────
 
 const run = async () => {
   const client = await pool.connect();
@@ -81,7 +76,6 @@ const run = async () => {
   console.log("");
 
   try {
-    // Buat tabel tracking migrasi (harus ada sebelum migration pertama dijalankan)
     await client.query(`
       CREATE TABLE IF NOT EXISTS public.migrations (
         id         SERIAL PRIMARY KEY,
@@ -90,7 +84,6 @@ const run = async () => {
       )
     `);
 
-    // Buat tabel tracking seeds
     await client.query(`
       CREATE TABLE IF NOT EXISTS public.seeds (
         id         SERIAL PRIMARY KEY,
@@ -99,7 +92,6 @@ const run = async () => {
       )
     `);
 
-    // ── Jalankan migrations ──────────────────────────────────────
     console.log("📦 Migrations:");
     const migrCount = await runSqlFiles(
       client,
@@ -110,7 +102,6 @@ const run = async () => {
 
     console.log("");
 
-    // ── Jalankan seeds (hanya jika bukan production) ─────────────
     if (env.nodeEnv !== "production") {
       console.log("🌱 Seeds:");
       const seedCount = await runSqlFiles(client, SEEDS_DIR, "seeds", "seed");

@@ -202,4 +202,15 @@ router.delete(
   controller.remove,
 );
 
+router.patch(
+  "/:id",
+  authorize(
+    "superadmin",
+    "owner",
+    "content_lead",
+    "admin_social_media",
+  ),
+  controller.update,
+);
+
 export default router;

@@ -8,9 +8,6 @@ import { UPLOAD_DIR } from "#config/upload.js";
 const STORAGE_LIMIT_MB =
   parseInt(process.env.STORAGE_LIMIT_MB, 10) || 2048;
 
-export const getStorageLimitMb = () => STORAGE_LIMIT_MB;
-
-// Async recursive dir size — mencegah event-loop blocking pada direktori besar
 const getDirSizeBytes = async (dirPath) => {
   try {
     const entries = await fs.promises.readdir(dirPath, { withFileTypes: true });

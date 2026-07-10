@@ -5,7 +5,6 @@ import path from "path";
 import { fileURLToPath } from "url";
 import env from "#config/env.js";
 
-// Pengganti __dirname di ES Module
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -21,8 +20,6 @@ const pool = new Pool({
 
 const SEEDS_DIR = path.join(__dirname, "seeds");
 
-// ─── Main ─────────────────────────────────────────────────────────────────────
-
 const run = async () => {
   const client = await pool.connect();
 
@@ -35,7 +32,6 @@ const run = async () => {
   console.log("");
 
   try {
-    // Buat tabel tracking seeds jika belum ada
     await client.query(`
       CREATE TABLE IF NOT EXISTS public.seeds (
         id         SERIAL PRIMARY KEY,
@@ -44,7 +40,6 @@ const run = async () => {
       )
     `);
 
-    // ── Jalankan seeds ──────────────────────────────────────────
     const files = fs
       .readdirSync(SEEDS_DIR)
       .filter((f) => f.endsWith(".sql"))

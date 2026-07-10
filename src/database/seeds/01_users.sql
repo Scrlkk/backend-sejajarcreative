@@ -1,12 +1,12 @@
 -- Password semua akun: Admin@12345
 
 INSERT INTO core.users (full_name, email, password) VALUES
-  ('Super Admin', 'superadmin@sejajar.id', '$2b$10$A5wU1yoYCwDHMomBu2ftEeGgHhCToCDqjbg.5HbToEnjGqSi7Uc7K'),
+  ('Saya Superadmin', 'superadmin@sejajar.id', '$2b$10$A5wU1yoYCwDHMomBu2ftEeGgHhCToCDqjbg.5HbToEnjGqSi7Uc7K'),
   ('Mr. Cheng', 'owner@sejajar.id', '$2b$10$A5wU1yoYCwDHMomBu2ftEeGgHhCToCDqjbg.5HbToEnjGqSi7Uc7K'),
-  ('John Doe', 'contentlead@sejajar.id', '$2b$10$A5wU1yoYCwDHMomBu2ftEeGgHhCToCDqjbg.5HbToEnjGqSi7Uc7K'),
-  ('Jane Smith', 'editor@sejajar.id', '$2b$10$A5wU1yoYCwDHMomBu2ftEeGgHhCToCDqjbg.5HbToEnjGqSi7Uc7K'),
-  ('Michael Johnson', 'writer@sejajar.id', '$2b$10$A5wU1yoYCwDHMomBu2ftEeGgHhCToCDqjbg.5HbToEnjGqSi7Uc7K'),
-  ('Emily Davis', 'sosmed@sejajar.id', '$2b$10$A5wU1yoYCwDHMomBu2ftEeGgHhCToCDqjbg.5HbToEnjGqSi7Uc7K')
+  ('John Joestar', 'contentlead@sejajar.id', '$2b$10$A5wU1yoYCwDHMomBu2ftEeGgHhCToCDqjbg.5HbToEnjGqSi7Uc7K'),
+  ('Jack Widow.', 'editor@sejajar.id', '$2b$10$A5wU1yoYCwDHMomBu2ftEeGgHhCToCDqjbg.5HbToEnjGqSi7Uc7K'),
+  ('Harry Kane', 'writer@sejajar.id', '$2b$10$A5wU1yoYCwDHMomBu2ftEeGgHhCToCDqjbg.5HbToEnjGqSi7Uc7K'),
+  ('Lancelot MBG', 'sosmed@sejajar.id', '$2b$10$A5wU1yoYCwDHMomBu2ftEeGgHhCToCDqjbg.5HbToEnjGqSi7Uc7K')
 ON CONFLICT (email) DO NOTHING;
 
 INSERT INTO core.user_roles (user_id, role_id)
@@ -23,7 +23,6 @@ JOIN (VALUES
 JOIN core.roles r ON r.role_name = v.role_name
 ON CONFLICT (user_id, role_id) DO NOTHING;
 
--- Seed sample client
 INSERT INTO core.clients (client_name, company_name, contact_email, contact_phone)
 SELECT 'Budi Santoso', 'FreshBrew Coffee', 'budi@freshbrew.com', '08123456789'
 WHERE NOT EXISTS (

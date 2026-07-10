@@ -16,8 +16,7 @@ router.get("/healthz", (req, res) => {
 });
 
 /**
- * Readiness probe - untuk check apakah service siap menerima requests
- * Includes database connectivity check
+ * Readiness probe & Detailed Status - check if service and DB are ready
  */
 router.get("/health", async (req, res) => {
   try {
@@ -28,7 +27,12 @@ router.get("/health", async (req, res) => {
       return res.status(503).json({
         status: "unhealthy",
         service: "express-sejajar",
-        database: "disconnected",
+        version: "1.0.0",
+        environment: process.env.NODE_ENV || "development",
+        database: {
+          connected: false,
+          status: "disconnected",
+        },
         timestamp: new Date().toISOString(),
       });
     }
@@ -36,40 +40,12 @@ router.get("/health", async (req, res) => {
     res.json({
       status: "healthy",
       service: "express-sejajar",
-      database: "connected",
-      uptime: process.uptime(),
-      memory: {
-        used: Math.round(process.memoryUsage().heapUsed / 1024 / 1024),
-        total: Math.round(process.memoryUsage().heapTotal / 1024 / 1024),
-      },
-      timestamp: new Date().toISOString(),
-    });
-  } catch (err) {
-    logger.error("Health check error", { error: err.message });
-    res.status(503).json({
-      status: "unhealthy",
-      service: "express-sejajar",
-      error: err.message,
-      timestamp: new Date().toISOString(),
-    });
-  }
-});
-
-/**
- * Detailed status endpoint - untuk monitoring
- */
-router.get("/status", async (req, res) => {
-  try {
-    const dbHealthy = await checkDBHealth();
-
-    res.json({
       version: "1.0.0",
-      service: "express-sejajar",
       environment: process.env.NODE_ENV || "development",
       uptime: process.uptime(),
       database: {
-        connected: dbHealthy,
-        status: dbHealthy ? "connected" : "disconnected",
+        connected: true,
+        status: "connected",
       },
       memory: {
         used: Math.round(process.memoryUsage().heapUsed / 1024 / 1024),
@@ -82,8 +58,12 @@ router.get("/status", async (req, res) => {
       timestamp: new Date().toISOString(),
     });
   } catch (err) {
-    logger.error("Status check error", { error: err.message });
-    res.status(500).json({
+    logger.error("Health check error", { error: err.message });
+    res.status(503).json({
+      status: "unhealthy",
+      service: "express-sejajar",
+      version: "1.0.0",
+      environment: process.env.NODE_ENV || "development",
       error: err.message,
       timestamp: new Date().toISOString(),
     });

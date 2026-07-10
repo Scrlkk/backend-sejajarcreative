@@ -1,7 +1,7 @@
 import AppError from "./AppError.js";
 import pool from "#config/database.js";
 
-export const ALLOWED_UPDATE_FIELDS = {
+const ALLOWED_UPDATE_FIELDS = {
   "core.users": ["full_name", "email", "password"],
   "core.contracts": [
     "contract_name",
@@ -59,7 +59,7 @@ export const validateUpdateFields = (table, fields) => {
   return keys;
 };
 
-export const TABLES_WITH_UPDATED_AT = [
+const TABLES_WITH_UPDATED_AT = [
   "core.users",
   "core.contracts",
   "core.tasks",
@@ -96,11 +96,6 @@ export const updateByIdWithWhitelist = async (pool, table, id, fields) => {
   }
 
   return rows[0];
-};
-
-export const isFieldAllowed = (table, field) => {
-  const allowed = ALLOWED_UPDATE_FIELDS[table];
-  return allowed ? allowed.includes(field) : false;
 };
 
 export const runInTransaction = async (action, dbPool = pool) => {

@@ -42,7 +42,7 @@ export const getContentLeadSummary = async (leadId) => {
   };
 };
 
-export const getContentTimelineChart = async (leadId, query) => {
+export const getContentTimelineChart = async (user, role, query) => {
   const { from, to } = parseDateRange(query);
   const limit = Math.min(Math.max(parseInt(query.limit, 10) || 50, 1), 100);
 
@@ -55,9 +55,12 @@ export const getContentTimelineChart = async (leadId, query) => {
        AND c.created_at < $2`;
   const params = [from, to];
   let idx = 3;
-  if (leadId) {
+  if (role === "owner") {
+    sql += ` AND co.created_by = $${idx++}`;
+    params.push(user.id);
+  } else if (role === "content_lead") {
     sql += ` AND co.lead_by = $${idx++}`;
-    params.push(leadId);
+    params.push(user.id);
   }
   sql += ` ORDER BY c.created_at DESC LIMIT $${idx}`;
   params.push(limit);
@@ -72,7 +75,7 @@ export const getContentTimelineChart = async (leadId, query) => {
   };
 };
 
-export const getContentByStatusDateChart = async (leadId, query) => {
+export const getContentByStatusDateChart = async (user, role, query) => {
   const { from, to } = parseDateRange(query);
 
   let sql = `SELECT
@@ -86,9 +89,13 @@ export const getContentByStatusDateChart = async (leadId, query) => {
        AND c.created_at >= $1
        AND c.created_at < $2`;
   const params = [from, to];
-  if (leadId) {
-    sql += ` AND co.lead_by = $3`;
-    params.push(leadId);
+  let idx = 3;
+  if (role === "owner") {
+    sql += ` AND co.created_by = $${idx++}`;
+    params.push(user.id);
+  } else if (role === "content_lead") {
+    sql += ` AND co.lead_by = $${idx++}`;
+    params.push(user.id);
   }
   sql += ` GROUP BY DATE(c.created_at), c.status ORDER BY date ASC, c.status ASC`;
 
@@ -126,7 +133,7 @@ export const getContentByStatusDateChart = async (leadId, query) => {
   };
 };
 
-export const getPillarsUsageChart = async (leadId) => {
+export const getPillarsUsageChart = async (user, role) => {
   let sql = `SELECT
        p.id,
        p.pillar_name,
@@ -141,9 +148,12 @@ export const getPillarsUsageChart = async (leadId) => {
            AND co.deleted_at IS NULL
            AND co.is_active = true`;
   const params = [];
-  if (leadId) {
+  if (role === "owner") {
+    sql += ` AND co.created_by = $1`;
+    params.push(user.id);
+  } else if (role === "content_lead") {
     sql += ` AND co.lead_by = $1`;
-    params.push(leadId);
+    params.push(user.id);
   }
   sql += `
        )

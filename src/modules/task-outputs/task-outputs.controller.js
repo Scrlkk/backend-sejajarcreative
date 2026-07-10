@@ -70,3 +70,12 @@ export const remove = async (req, res, next) => {
     next(e);
   }
 };
+
+export const update = async (req, res, next) => {
+  try {
+    const data = await service.update(+req.params.id, req.body, req.user);
+    success(res, enrichOutput(data), "Task output berhasil diperbarui");
+  } catch (e) {
+    next(e);
+  }
+};
