@@ -231,6 +231,7 @@ Sebelum memulai, pastikan perangkat Anda telah memasang:
 | `npm run migrate:fresh` | Menghapus semua tabel (*drop*) lalu membuat ulang skema migrasi dari awal. |
 | `npm run seed` | Mengisi database dengan dummy data/seeder awal (akun user, pilar, dan tugas). |
 | `npm run test` | Mengeksekusi pengujian unit test (*unit testing*) menggunakan Vitest. |
+| `npm run lint` | Mengeksekusi pengecekan sintaksis dan kualitas kode menggunakan ESLint. |
 
 ---
 
