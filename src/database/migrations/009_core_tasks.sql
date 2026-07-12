@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS core.tasks (
   deadline    DATE,
   status      core.task_status DEFAULT 'to_do',
   is_active   BOOLEAN NOT NULL DEFAULT true,
+  role        VARCHAR(50),
   deleted_at  TIMESTAMP,
   created_at  TIMESTAMP DEFAULT now(),
   updated_at  TIMESTAMP DEFAULT now(),

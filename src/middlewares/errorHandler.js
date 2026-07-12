@@ -1,7 +1,7 @@
 import logger from "#config/logger.js";
 import { error as errorResponse } from "#utils/response.js";
 
-const errorHandler = (err, req, res, next) => {
+const errorHandler = (err, req, res, _next) => {
   // PostgreSQL constraint errors
   if (err.code === "23505") {
     return errorResponse(res, "Data sudah ada (duplicate)", 409, err.detail || undefined);

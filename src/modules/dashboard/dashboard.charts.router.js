@@ -2,6 +2,7 @@ import AppError from "#utils/AppError.js";
 import * as contentLeadService from "./dashboard.content-lead.service.js";
 import * as ownerCharts from "./dashboard.charts.service.js";
 import * as staffService from "./dashboard.staff.service.js";
+import { METRIC_ROLES } from "./dashboard.helpers.js";
 
 export const OWNER_METRICS = [
   "engagement",
@@ -31,23 +32,6 @@ export const ALL_CHART_METRICS = [
   ...CONTENT_LEAD_METRICS,
   ...STAFF_METRICS,
 ];
-
-const METRIC_ROLES = {
-  engagement: ["owner", "content_lead", "admin_social_media", "superadmin"],
-  engagement_by_platform: ["owner", "content_lead", "admin_social_media", "superadmin"],
-  contracts_revenue: ["owner", "superadmin"],
-  contracts_by_status: ["owner", "superadmin"],
-  users_by_tasks: ["owner", "superadmin"],
-  clients_total: ["owner", "superadmin"],
-  clients_new: ["owner", "superadmin"],
-  clients_by_active_contracts: ["owner", "superadmin"],
-  clients_by_completed_contracts: ["owner", "superadmin"],
-  content_timeline: ["content_lead", "superadmin"],
-  content_by_status_date: ["owner", "content_lead", "admin_social_media", "superadmin"],
-  pillars_usage: ["owner", "content_lead", "admin_social_media", "superadmin"],
-  tasks_by_status: ["script_writer", "content_editor", "admin_social_media", "superadmin"],
-  comments_revision: ["script_writer", "content_editor", "admin_social_media", "superadmin"],
-};
 
 export const assertMetricAccess = (role, metric) => {
   if (!ALL_CHART_METRICS.includes(metric)) {

@@ -90,9 +90,8 @@ export const login = async (email, password, extra = {}) => {
 };
 
 export const refresh = async (token) => {
-  let decoded;
   try {
-    decoded = verifyRefresh(token);
+    verifyRefresh(token);
   } catch {
     throw new AppError("Invalid or expired refresh token", 401);
   }

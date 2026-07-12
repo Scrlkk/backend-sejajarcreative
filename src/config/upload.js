@@ -61,7 +61,7 @@ const storage = multer.diskStorage({
     const ext = path.extname(file.originalname).toLowerCase();
     const baseName = path
       .basename(file.originalname, ext)
-      .replace(/[^a-zA-Z0-9_\-]/g, "_")
+      .replace(/[^a-zA-Z0-9_-]/g, "_")
       .substring(0, 80);
     const uniqueSuffix = Date.now();
     cb(null, `${baseName}-${uniqueSuffix}${ext}`);

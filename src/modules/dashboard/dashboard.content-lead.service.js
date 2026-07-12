@@ -1,8 +1,6 @@
 import pool from "#config/database.js";
 import { parseDateRange } from "./dashboard.helpers.js";
 
-const ACTIVE_CONTENT = `c.deleted_at IS NULL AND c.is_active = true`;
-
 export const getContentLeadSummary = async (leadId) => {
   const [contractsResult, contentsResult] = await Promise.all([
     pool.query(

@@ -135,7 +135,36 @@ export const parseDateRange = (query = {}, defaultDays = 30) => {
   return { from, to: end };
 };
 
-export const resolvePrimaryRole = (user, queryRole = null) => {
+export const METRIC_ROLES = {
+  engagement: ["owner", "content_lead", "admin_social_media", "superadmin"],
+  engagement_by_platform: ["owner", "content_lead", "admin_social_media", "superadmin"],
+  contracts_revenue: ["owner", "superadmin"],
+  contracts_by_status: ["owner", "superadmin"],
+  users_by_tasks: ["owner", "superadmin"],
+  clients_total: ["owner", "superadmin"],
+  clients_new: ["owner", "superadmin"],
+  clients_by_active_contracts: ["owner", "superadmin"],
+  clients_by_completed_contracts: ["owner", "superadmin"],
+  content_timeline: ["content_lead", "superadmin"],
+  content_by_status_date: ["owner", "content_lead", "admin_social_media", "superadmin"],
+  pillars_usage: ["owner", "content_lead", "admin_social_media", "superadmin"],
+  tasks_by_status: ["script_writer", "content_editor", "admin_social_media", "superadmin"],
+  comments_revision: ["script_writer", "content_editor", "admin_social_media", "superadmin"],
+};
+
+export const WIDGET_ACCESS = {
+  "reviews-list": ["content_lead", "superadmin"],
+  "upcoming-deadlines": ["script_writer", "content_editor", "admin_social_media", "superadmin"],
+  "recent-comments": ["content_lead", "script_writer", "content_editor", "admin_social_media", "superadmin"],
+  "pillars_usage": ["script_writer", "superadmin"],
+  "latest-tasks": ["content_editor", "superadmin"],
+  "tasks-by-status": ["content_editor", "admin_social_media", "superadmin"],
+  "tasks-title-priority": ["content_editor", "superadmin"],
+  calendar: ["superadmin", "owner", "content_lead", "script_writer", "content_editor", "admin_social_media"],
+  "system-logs-summary": ["superadmin", "owner"],
+};
+
+export const resolvePrimaryRole = (user, queryRole = null, options = {}) => {
   const roles = user.roles?.length
     ? user.roles
     : user.role
@@ -144,5 +173,24 @@ export const resolvePrimaryRole = (user, queryRole = null) => {
   if (queryRole && roles.includes(queryRole)) {
     return queryRole;
   }
-  return pickPrimaryRole(roles);
+  
+  const primaryRole = pickPrimaryRole(roles);
+
+  if (options.metric) {
+    const allowed = METRIC_ROLES[options.metric];
+    if (allowed && !allowed.includes(primaryRole)) {
+      const alternative = roles.find(r => allowed.includes(r));
+      if (alternative) return alternative;
+    }
+  }
+
+  if (options.widget) {
+    const allowed = WIDGET_ACCESS[options.widget];
+    if (allowed && !allowed.includes(primaryRole)) {
+      const alternative = roles.find(r => allowed.includes(r));
+      if (alternative) return alternative;
+    }
+  }
+
+  return primaryRole;
 };

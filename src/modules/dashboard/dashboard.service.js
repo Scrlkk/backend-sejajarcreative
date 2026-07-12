@@ -21,7 +21,7 @@ const getOwnerSummary = async (ownerId) => {
            COUNT(*) FILTER (WHERE status = 'active')::int AS active,
            COUNT(*) FILTER (WHERE status = 'completed')::int AS completed,
            COUNT(*) FILTER (WHERE status = 'overdue')::int AS overdue,
-           COALESCE(SUM(revenue) FILTER (WHERE status = 'active'), 0)::float AS total_revenue
+           COALESCE(SUM(revenue) FILTER (WHERE status IN ('active', 'completed', 'overdue')), 0)::float AS total_revenue
          FROM core.contracts
          WHERE is_active = true AND deleted_at IS NULL AND created_by = $1`,
         [ownerId],
@@ -136,7 +136,7 @@ export const getSummary = async (user, queryRole = null) => {
 };
 
 export const getCharts = async (user, query = {}) => {
-  const role = resolvePrimaryRole(user, query.role);
+  const role = resolvePrimaryRole(user, query.role, { metric: query.metric });
   return getChartByMetric(user, role, query);
 };
 

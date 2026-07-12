@@ -1,23 +1,11 @@
 import AppError from "#utils/AppError.js";
-import { resolvePrimaryRole } from "./dashboard.helpers.js";
+import { resolvePrimaryRole, WIDGET_ACCESS } from "./dashboard.helpers.js";
 import { getReviewsListWidget } from "./dashboard.content-lead.service.js";
 import * as staffService from "./dashboard.staff.service.js";
 import * as phase6Service from "./dashboard.phase6.service.js";
 
-const WIDGET_ACCESS = {
-  "reviews-list": ["content_lead", "superadmin"],
-  "upcoming-deadlines": ["script_writer", "content_editor", "admin_social_media", "superadmin"],
-  "recent-comments": ["content_lead", "script_writer", "content_editor", "admin_social_media", "superadmin"],
-  "pillars_usage": ["script_writer", "superadmin"],
-  "latest-tasks": ["content_editor", "superadmin"],
-  "tasks-by-status": ["content_editor", "admin_social_media", "superadmin"],
-  "tasks-title-priority": ["content_editor", "superadmin"],
-  "calendar": ["superadmin", "owner", "content_lead", "script_writer", "content_editor", "admin_social_media"],
-  "system-logs-summary": ["superadmin", "owner"],
-};
-
 export const getWidget = async (user, name, query = {}) => {
-  const role = resolvePrimaryRole(user, query.role);
+  const role = resolvePrimaryRole(user, query.role, { widget: name });
   const allowed = WIDGET_ACCESS[name];
 
   if (!allowed) {

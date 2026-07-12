@@ -1,12 +1,12 @@
 -- Password semua akun: Admin@12345
 
 INSERT INTO core.users (full_name, email, password) VALUES
-  ('Saya Superadmin', 'superadmin@sejajar.id', '$2b$10$A5wU1yoYCwDHMomBu2ftEeGgHhCToCDqjbg.5HbToEnjGqSi7Uc7K'),
+  ('Kang Jim', 'superadmin@sejajar.id', '$2b$10$A5wU1yoYCwDHMomBu2ftEeGgHhCToCDqjbg.5HbToEnjGqSi7Uc7K'),
   ('Mr. Cheng', 'owner@sejajar.id', '$2b$10$A5wU1yoYCwDHMomBu2ftEeGgHhCToCDqjbg.5HbToEnjGqSi7Uc7K'),
   ('John Joestar', 'contentlead@sejajar.id', '$2b$10$A5wU1yoYCwDHMomBu2ftEeGgHhCToCDqjbg.5HbToEnjGqSi7Uc7K'),
-  ('Jack Widow.', 'editor@sejajar.id', '$2b$10$A5wU1yoYCwDHMomBu2ftEeGgHhCToCDqjbg.5HbToEnjGqSi7Uc7K'),
-  ('Harry Kane', 'writer@sejajar.id', '$2b$10$A5wU1yoYCwDHMomBu2ftEeGgHhCToCDqjbg.5HbToEnjGqSi7Uc7K'),
-  ('Lancelot MBG', 'sosmed@sejajar.id', '$2b$10$A5wU1yoYCwDHMomBu2ftEeGgHhCToCDqjbg.5HbToEnjGqSi7Uc7K')
+  ('Harry Kane', 'editor@sejajar.id', '$2b$10$A5wU1yoYCwDHMomBu2ftEeGgHhCToCDqjbg.5HbToEnjGqSi7Uc7K'),
+  ('Jack Do', 'writer@sejajar.id', '$2b$10$A5wU1yoYCwDHMomBu2ftEeGgHhCToCDqjbg.5HbToEnjGqSi7Uc7K'),
+  ('Hadi Lukas', 'sosmed@sejajar.id', '$2b$10$A5wU1yoYCwDHMomBu2ftEeGgHhCToCDqjbg.5HbToEnjGqSi7Uc7K')
 ON CONFLICT (email) DO NOTHING;
 
 INSERT INTO core.user_roles (user_id, role_id)

@@ -4,6 +4,7 @@ import { paginate } from "#utils/pagination.js";
 import { createNotification } from "../notifications/notifications.service.js";
 import { updateByIdWithWhitelist } from "#utils/dbHelper.js";
 import { syncContentStatus } from "../tasks/tasks.service.js";
+import { checkContractStatusByContentId } from "#utils/contractValidation.js";
 
 const listSelect = `
   SELECT c.*,
@@ -38,13 +39,8 @@ const listSelect = `
                 SELECT 1 FROM auth.refresh_tokens rt 
                 WHERE rt.user_id = u.id AND rt.expires_at > NOW()
               ),
-              'roles', COALESCE(
-                (SELECT json_agg(r.role_name ORDER BY r.role_name)
-                 FROM core.user_roles ur
-                 JOIN core.roles r ON r.id = ur.role_id
-                 WHERE ur.user_id = u.id),
-                '[]'::json
-              )
+              'role', ct.role,
+              'roles', json_build_array(ct.role)
             ))
             FROM core.content_teams ct
             JOIN core.users u ON u.id = ct.user_id
@@ -57,45 +53,71 @@ const listSelect = `
   JOIN core.contracts co ON co.id = c.contract_id
 `;
 
-// ── Sync helpers ──────────────────────────────────────────────────────────────
+const syncTeams = async (client, contentId, teams) => {
+  if (!Array.isArray(teams)) return { addedUsers: [], removedUsers: [] };
 
-const syncTeams = async (client, contentId, userIds) => {
-  if (!Array.isArray(userIds)) return { addedUsers: [], removedUsers: [] };
+  const newTeams = teams.map((item) => {
+    if (typeof item === "object" && item !== null) {
+      return {
+        user_id: Number(item.user_id),
+        role: item.role || "member",
+      };
+    } else {
+      return {
+        user_id: Number(item),
+        role: "member",
+      };
+    }
+  });
+
+  const newUserIds = [...new Set(newTeams.map((t) => t.user_id))];
 
   const { rows: existingRows } = await client.query(
-    "SELECT user_id FROM core.content_teams WHERE content_id = $1",
+    "SELECT user_id, role FROM core.content_teams WHERE content_id = $1",
     [contentId],
   );
-  const existingUserIds = existingRows.map((row) => Number(row.user_id));
-  const newUserIds = userIds.map(Number);
+  const existingUserIds = [...new Set(existingRows.map((row) => Number(row.user_id)))];
 
   const addedUsers = newUserIds.filter((uid) => !existingUserIds.includes(uid));
   const removedUsers = existingUserIds.filter(
     (uid) => !newUserIds.includes(uid),
   );
 
+  const removedAssignments = existingRows.filter(
+    (existing) => !newTeams.some(
+      (item) => Number(item.user_id) === Number(existing.user_id) && item.role === existing.role
+    )
+  );
+
   await client.query("DELETE FROM core.content_teams WHERE content_id = $1", [
     contentId,
   ]);
 
-  if (userIds.length > 0) {
-    const values = userIds.map((uid, i) => `($1, $${i + 2})`).join(", ");
+  if (newTeams.length > 0) {
+    const values = newTeams.map((_, i) => `($1, $${i * 2 + 2}, $${i * 2 + 3})`).join(", ");
+    const params = [contentId];
+    newTeams.forEach((t) => {
+      params.push(t.user_id, t.role);
+    });
     await client.query(
-      `INSERT INTO core.content_teams (content_id, user_id) VALUES ${values}`,
-      [contentId, ...userIds],
+      `INSERT INTO core.content_teams (content_id, user_id, role) VALUES ${values}`,
+      params,
     );
   }
 
-  // Soft-delete tasks of removed users
-  if (removedUsers.length > 0) {
-    await client.query(
-      `UPDATE core.tasks 
-       SET deleted_at = now(), is_active = false, updated_at = now()
-       WHERE content_id = $1 
-         AND assigned_to = ANY($2::int[]) 
-         AND deleted_at IS NULL`,
-      [contentId, removedUsers],
-    );
+  // Soft-delete tugas untuk kombinasi user-role yang dihapus
+  if (removedAssignments.length > 0) {
+    for (const assignment of removedAssignments) {
+      await client.query(
+        `UPDATE core.tasks 
+         SET deleted_at = now(), is_active = false, updated_at = now()
+         WHERE content_id = $1 
+           AND assigned_to = $2 
+           AND role = $3
+           AND deleted_at IS NULL`,
+        [contentId, assignment.user_id, assignment.role],
+      );
+    }
   }
 
   return { addedUsers, removedUsers };
@@ -225,11 +247,15 @@ export const create = async (data, createdBy) => {
   const client = await pool.connect();
   try {
     const contractRes = await client.query(
-      "SELECT created_by, lead_by FROM core.contracts WHERE id = $1 AND deleted_at IS NULL AND is_active = true",
+      "SELECT created_by, lead_by, status FROM core.contracts WHERE id = $1 AND deleted_at IS NULL AND is_active = true",
       [contract_id],
     );
     const contract = contractRes.rows[0];
     if (!contract) throw new AppError("Contract not found or inactive", 404);
+
+    if (["completed", "cancelled"].includes(contract.status?.toLowerCase())) {
+      throw new AppError("Kontrak telah selesai atau dibatalkan, tidak dapat menambah rencana konten baru", 400);
+    }
 
     if (createdBy && !createdBy.roles.includes("superadmin")) {
       const isLead =
@@ -349,6 +375,7 @@ export const update = async (id, fields, user) => {
   }
 
   const existing = await getById(id, user);
+  await checkContractStatusByContentId(pool, id);
 
   if (user && !user.roles.includes("superadmin")) {
     const isOwner =
@@ -498,6 +525,7 @@ export const update = async (id, fields, user) => {
 export const remove = async (id, user) => {
   const content = await getById(id, user);
   if (!content) throw new AppError("Content not found", 404);
+  await checkContractStatusByContentId(pool, id);
 
   if (user && !user.roles.includes("superadmin")) {
     const isOwner =
@@ -567,6 +595,7 @@ export const remove = async (id, user) => {
 
 export const publish = async (id, user) => {
   const existing = await getById(id, user);
+  await checkContractStatusByContentId(pool, id);
 
   if (user && !user.roles.includes("superadmin")) {
     const isLead =
@@ -631,6 +660,7 @@ export const publish = async (id, user) => {
 };
 
 export const restore = async (id, user) => {
+  await checkContractStatusByContentId(pool, id);
   const { rows: checkRows } = await pool.query(
     `SELECT c.id, co.created_by AS contract_created_by, co.lead_by AS contract_lead_by
      FROM core.contents c

@@ -1,13 +1,6 @@
 import pool from "#config/database.js";
 import { parseDateRange } from "./dashboard.helpers.js";
 
-const ACTIVE_CONTRACT = `
-  co.is_active = true AND co.deleted_at IS NULL
-`;
-
-const ACTIVE_CLIENT = `
-  c.is_active = true AND c.deleted_at IS NULL
-`;
 
 const calcEngagementRate = (views, likes, comments, shares) => {
   if (!views || views <= 0) return 0;

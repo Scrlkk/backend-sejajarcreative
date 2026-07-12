@@ -13,7 +13,7 @@ const ALLOWED_UPDATE_FIELDS = {
     "revenue",
     "lead_by",
   ],
-  "core.tasks": ["title", "description", "status", "deadline", "assigned_to"],
+  "core.tasks": ["title", "description", "status", "deadline", "assigned_to", "role"],
   "core.clients": [
     "client_name",
     "company_name",

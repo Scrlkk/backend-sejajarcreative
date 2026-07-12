@@ -4,6 +4,10 @@ import { paginate } from "#utils/pagination.js";
 import { updateByIdWithWhitelist } from "#utils/dbHelper.js";
 import { pickPrimaryRole } from "#utils/userRoles.js";
 import { createNotification } from "../notifications/notifications.service.js";
+import {
+  checkContractStatusByContentId,
+  checkContractStatusByTaskId,
+} from "#utils/contractValidation.js";
 
 const selectTasksBase = `
   SELECT t.*, c.title AS content_title, c.contract_id, c.format AS content_format,
@@ -28,13 +32,12 @@ const selectTasksBase = `
             WHERE cp.content_id = c.id),
            '[]'::json
          ) AS pillars,
-         COALESCE(
-           (SELECT json_agg(r.role_name ORDER BY r.role_name)
-            FROM core.user_roles ur
-            JOIN core.roles r ON r.id = ur.role_id
-            WHERE ur.user_id = t.assigned_to),
-           '[]'::json
-         ) AS assignee_roles
+          COALESCE(
+            (SELECT json_agg(ct_role.role ORDER BY ct_role.role)
+             FROM core.content_teams ct_role
+             WHERE ct_role.content_id = t.content_id AND ct_role.user_id = t.assigned_to),
+            '[]'::json
+          ) AS assignee_roles
   FROM core.tasks t
   JOIN core.contents c ON c.id = t.content_id
   JOIN core.users u ON u.id = t.assigned_to
@@ -59,7 +62,7 @@ const mapTask = (row) => {
   return {
     ...row,
     assignee_roles: roles,
-    assignee_role: pickPrimaryRole(roles),
+    assignee_role: row.role || pickPrimaryRole(roles),
     pillars,
   };
 };
@@ -82,31 +85,25 @@ export const syncContentStatus = async (contentId) => {
       const reviewCount = siblingTasks.filter(
         (t) => t.status === "review",
       ).length;
-      const revisionCount = siblingTasks.filter(
-        (t) => t.status === "revision",
-      ).length;
 
       let newContentStatus = null;
       if (totalTasks > 0) {
-        const toDoCount = siblingTasks.filter(
-          (t) => t.status === "to_do",
-        ).length;
-        const onProgressCount = siblingTasks.filter(
-          (t) => t.status === "on_progress",
-        ).length;
-
         if (approvedCount === totalTasks) {
           newContentStatus = "approved";
         } else if (reviewCount > 0) {
           newContentStatus = "review";
-        } else if (
-          revisionCount > 0 ||
-          approvedCount > 0 ||
-          onProgressCount > 0
-        ) {
+        } else {
           newContentStatus = "on_progress";
-        } else if (toDoCount === totalTasks) {
+        }
+      } else {
+        const { rows: teamRows } = await pool.query(
+          `SELECT 1 FROM core.content_teams WHERE content_id = $1 LIMIT 1`,
+          [contentId],
+        );
+        if (teamRows.length > 0) {
           newContentStatus = "assigned";
+        } else {
+          newContentStatus = "draft";
         }
       }
 
@@ -195,9 +192,14 @@ export const getById = async (id, user) => {
 };
 
 export const create = async (
-  { content_id, assigned_to, title, description, deadline, status },
+  { content_id, assigned_to, title, description, deadline, status, role },
   createdBy,
 ) => {
+  await checkContractStatusByContentId(
+    pool,
+    content_id,
+    "Kontrak terkait telah selesai atau dibatalkan, tidak dapat memodifikasi tugas",
+  );
   const contentRes = await pool.query(
     `SELECT c.id, co.created_by AS contract_created_by, co.lead_by AS contract_lead_by
      FROM core.contents c
@@ -209,17 +211,22 @@ export const create = async (
   if (!content) throw new AppError("Content not found", 404);
 
   if (createdBy && !createdBy.roles.includes("superadmin")) {
-    const isContractLead = createdBy.roles.includes("content_lead") && Number(content.contract_lead_by) === Number(createdBy.id);
+    const isContractLead =
+      createdBy.roles.includes("content_lead") &&
+      Number(content.contract_lead_by) === Number(createdBy.id);
     if (!isContractLead) {
-      throw new AppError("Forbidden: You cannot create tasks for this content", 403);
+      throw new AppError(
+        "Forbidden: You cannot create tasks for this content",
+        403,
+      );
     }
   }
 
   const targetStatus = status || "to_do";
   const { rows } = await pool.query(
-    `INSERT INTO core.tasks (content_id, assigned_to, title, description, deadline, status)
-     VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
-    [content_id, assigned_to, title, description, deadline, targetStatus],
+    `INSERT INTO core.tasks (content_id, assigned_to, title, description, deadline, status, role)
+     VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
+    [content_id, assigned_to, title, description, deadline, targetStatus, role],
   );
 
   const newTask = rows[0];
@@ -260,32 +267,47 @@ export const create = async (
 };
 
 export const update = async (id, fields, updatedBy) => {
+  await checkContractStatusByTaskId(pool, id);
   const existingTask = await getById(id, updatedBy);
   const oldAssignee = existingTask.assigned_to;
   const oldStatus = existingTask.status;
   const oldTitle = existingTask.title;
 
   if (updatedBy && !updatedBy.roles.includes("superadmin")) {
-    const isOwner = updatedBy.roles.includes("owner") && Number(existingTask.contract_created_by) === Number(updatedBy.id);
-    const isLead = updatedBy.roles.includes("content_lead") && Number(existingTask.lead_id) === Number(updatedBy.id);
-    const isAssignee = Number(existingTask.assigned_to) === Number(updatedBy.id);
+    const isOwner =
+      updatedBy.roles.includes("owner") &&
+      Number(existingTask.contract_created_by) === Number(updatedBy.id);
+    const isLead =
+      updatedBy.roles.includes("content_lead") &&
+      Number(existingTask.lead_id) === Number(updatedBy.id);
+    const isAssignee =
+      Number(existingTask.assigned_to) === Number(updatedBy.id);
 
     // If status is being updated, validate status value permission
     if (fields.status && fields.status !== existingTask.status) {
       if (!isAssignee) {
         // Not assignee: must be owner or lead, and can only set status to revision or approved
         if (!isOwner && !isLead) {
-          throw new AppError("Forbidden: You cannot modify this task status", 403);
+          throw new AppError(
+            "Forbidden: You cannot modify this task status",
+            403,
+          );
         }
         const allowedReviewerStatuses = ["revision", "approved"];
         if (!allowedReviewerStatuses.includes(fields.status)) {
-          throw new AppError("Forbidden: As owner/lead, you can only set task status to revision or approved", 403);
+          throw new AppError(
+            "Forbidden: As owner/lead, you can only set task status to revision or approved",
+            403,
+          );
         }
       } else {
         if (!isOwner && !isLead) {
           const forbiddenAssigneeStatuses = ["revision", "approved"];
           if (forbiddenAssigneeStatuses.includes(fields.status)) {
-            throw new AppError("Forbidden: As assignee, you cannot approve or request revision on your own task", 403);
+            throw new AppError(
+              "Forbidden: As assignee, you cannot approve or request revision on your own task",
+              403,
+            );
           }
           if (fields.status === "review") {
             const outputRes = await pool.query(
@@ -293,7 +315,10 @@ export const update = async (id, fields, updatedBy) => {
               [id],
             );
             if (outputRes.rows[0].cnt === 0) {
-              throw new AppError("Forbidden: Cannot set task to review status without deliverables or caption", 403);
+              throw new AppError(
+                "Forbidden: Cannot set task to review status without deliverables or caption",
+                403,
+              );
             }
           }
         }
@@ -302,16 +327,24 @@ export const update = async (id, fields, updatedBy) => {
 
     // Check non-status fields (metadata)
     const requestedFields = Object.keys(fields);
-    const nonStatusFields = requestedFields.filter(f => f !== "status");
+    const nonStatusFields = requestedFields.filter((f) => f !== "status");
     if (nonStatusFields.length > 0) {
       // Only owner can update metadata details
       if (!isOwner && !isLead) {
-        throw new AppError("Forbidden: You do not have permission to update task details", 403);
+        throw new AppError(
+          "Forbidden: You do not have permission to update task details",
+          403,
+        );
       }
     }
   }
 
-  const updatedTask = await updateByIdWithWhitelist(pool, "core.tasks", id, fields);
+  const updatedTask = await updateByIdWithWhitelist(
+    pool,
+    "core.tasks",
+    id,
+    fields,
+  );
 
   // 1. Notify if assignee changed
   if (
@@ -351,7 +384,7 @@ export const update = async (id, fields, updatedBy) => {
   if (fields.status && fields.status !== oldStatus) {
     const contentId = updatedTask.content_id;
     await syncContentStatus(contentId);
- 
+
     if (fields.status === "review") {
       try {
         const leadRes = await pool.query(
@@ -409,14 +442,14 @@ export const update = async (id, fields, updatedBy) => {
       }
     }
   }
- 
+
   // 3. Notify if title or description changed
   const newTitle = fields.title !== undefined ? fields.title : oldTitle;
   const titleChanged = fields.title !== undefined && fields.title !== oldTitle;
   const descChanged =
     fields.description !== undefined &&
     fields.description !== existingTask.description;
- 
+
   if (titleChanged || descChanged) {
     try {
       if (oldTitle === "Persiapan Konten" && newTitle !== "Persiapan Konten") {
@@ -442,15 +475,18 @@ export const update = async (id, fields, updatedBy) => {
       console.error("Failed to send task update notification:", err.message);
     }
   }
- 
+
   return updatedTask;
 };
 
 export const remove = async (id, user) => {
+  await checkContractStatusByTaskId(pool, id);
   const task = await getById(id, user);
 
   if (user && !user.roles.includes("superadmin")) {
-    const isContractLead = user.roles.includes("content_lead") && Number(task.lead_id) === Number(user.id);
+    const isContractLead =
+      user.roles.includes("content_lead") &&
+      Number(task.lead_id) === Number(user.id);
     if (!isContractLead) {
       throw new AppError("Forbidden: You cannot delete this task", 403);
     }
@@ -493,7 +529,9 @@ export const restore = async (id, user) => {
   if (!checkRows[0]) throw new AppError("Task tidak ditemukan", 404);
 
   if (user && !user.roles.includes("superadmin")) {
-    const isContractLead = user.roles.includes("content_lead") && Number(checkRows[0].lead_id) === Number(user.id);
+    const isContractLead =
+      user.roles.includes("content_lead") &&
+      Number(checkRows[0].lead_id) === Number(user.id);
     if (!isContractLead) {
       throw new AppError("Forbidden: You cannot restore this task", 403);
     }

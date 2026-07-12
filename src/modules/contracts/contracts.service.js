@@ -124,7 +124,6 @@ export const getById = async (id, user) => {
   const contract = rows[0];
   if (!contract) throw new AppError("Contract not found", 404);
 
-  // Scoping check for non-superadmins
   if (user && !user.roles.includes("superadmin")) {
     const isTeamMember = contract.teams?.some(t => Number(t.id) === Number(user.id));
     if (
@@ -173,12 +172,11 @@ export const create = async (data, createdBy) => {
       ],
     );
 
-    let syncResult = { addedUsers: [], removedUsers: [] };
     if (platform_ids?.length) {
       await syncPlatforms(client, rows[0].id, platform_ids);
     }
     if (team_user_ids?.length) {
-      syncResult = await syncTeams(client, rows[0].id, team_user_ids);
+      await syncTeams(client, rows[0].id, team_user_ids);
     }
 
     await client.query("COMMIT");
@@ -194,8 +192,6 @@ export const create = async (data, createdBy) => {
         source_id: contract.id,
       });
 
-
-      // Ambil seluruh user dengan role 'owner' yang aktif
       const ownersRes = await pool.query(
         `SELECT u.id 
          FROM core.users u
@@ -205,7 +201,6 @@ export const create = async (data, createdBy) => {
       );
 
       for (const owner of ownersRes.rows) {
-        // Jangan kirim notifikasi ke diri sendiri jika pembuatnya adalah owner tersebut
         if (Number(owner.id) === Number(createdBy.id)) continue;
 
         await createNotification(null, {
@@ -249,6 +244,13 @@ export const update = async (id, fields, user) => {
     const existing = await getById(id, user);
     const oldLeadBy = existing.lead_by;
 
+    if (["completed", "cancelled"].includes(existing.status?.toLowerCase())) {
+      const hasOtherFields = platform_ids !== undefined || team_user_ids !== undefined || keys.some(k => k !== "status");
+      if (hasOtherFields) {
+        throw new AppError("Kontrak telah selesai atau dibatalkan, tidak dapat mengubah informasi selain status kontrak", 400);
+      }
+    }
+
     if (user && !user.roles.includes("superadmin")) {
       const isOwner = user.roles.includes("owner") && Number(existing.created_by) === Number(user.id);
       const isContractLead = user.roles.includes("content_lead") && Number(existing.lead_by) === Number(user.id);
@@ -269,12 +271,11 @@ export const update = async (id, fields, user) => {
       await updateByIdWithWhitelist(client, "core.contracts", id, rest);
     }
 
-    let syncResult = { addedUsers: [], removedUsers: [] };
     if (platform_ids !== undefined) {
       await syncPlatforms(client, id, platform_ids);
     }
     if (team_user_ids !== undefined) {
-      syncResult = await syncTeams(client, id, team_user_ids);
+      await syncTeams(client, id, team_user_ids);
     }
 
     if (
@@ -301,6 +302,29 @@ export const update = async (id, fields, user) => {
         });
       } catch (err) {
         console.error("Failed to send contract lead update notification:", err.message);
+      }
+    }
+
+    if (fields.status && fields.status.toLowerCase() !== (existing.status || "").toLowerCase()) {
+      const normalizedStatus = fields.status.toLowerCase();
+      if (["completed", "cancelled"].includes(normalizedStatus)) {
+        try {
+          const statusTitle = normalizedStatus === "completed" ? "Kontrak Selesai" : "Kontrak Dibatalkan";
+          const statusMessage = normalizedStatus === "completed"
+            ? `Kontrak "${updatedContract.contract_name}" (${updatedContract.contract_code}) telah ditandai sebagai selesai.`
+            : `Kontrak "${updatedContract.contract_name}" (${updatedContract.contract_code}) telah dibatalkan.`;
+
+          await createNotification(null, {
+            recipient_id: updatedContract.lead_by,
+            sender_id: user.id || null,
+            title: statusTitle,
+            message: statusMessage,
+            source_type: "contract",
+            source_id: id,
+          });
+        } catch (err) {
+          console.error("Failed to send contract status update notification:", err.message);
+        }
       }
     }
 
@@ -345,7 +369,7 @@ export const remove = async (id, user) => {
         recipient_id: row.user_id,
         sender_id: user.id || null,
         title: "Kontrak Dihapus",
-        message: `Kontrak "${contract.title}" telah dihapus.`,
+        message: `Kontrak "${contract.contract_name}" telah dihapus.`,
         source_type: "contract",
         source_id: id,
       });
@@ -411,7 +435,7 @@ export const restore = async (id, user) => {
         recipient_id: row.user_id,
         sender_id: user.id || null,
         title: "Kontrak Diaktifkan Kembali",
-        message: `Kontrak "${contract.title}" telah diaktifkan kembali.`,
+        message: `Kontrak "${contract.contract_name}" telah diaktifkan kembali.`,
         source_type: "contract",
         source_id: id,
       });
