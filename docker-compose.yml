@@ -10,6 +10,7 @@ services:
       POSTGRES_USER: ${DB_USER:-postgres}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
       POSTGRES_DB: ${DB_NAME}
+      TZ: ${TZ:-Asia/Jakarta}
     ports:
       - "5432:5432"
     volumes:

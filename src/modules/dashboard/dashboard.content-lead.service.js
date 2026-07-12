@@ -131,7 +131,9 @@ export const getContentByStatusDateChart = async (user, role, query) => {
   };
 };
 
-export const getPillarsUsageChart = async (user, role) => {
+export const getPillarsUsageChart = async (user, role, query = {}) => {
+  const { from, to } = parseDateRange(query);
+
   let sql = `SELECT
        p.id,
        p.pillar_name,
@@ -140,17 +142,19 @@ export const getPillarsUsageChart = async (user, role) => {
      LEFT JOIN core.content_pillars cp ON cp.pillar_id = p.id
      LEFT JOIN core.contents c
        ON c.id = cp.content_id AND c.deleted_at IS NULL AND c.is_active = true
+       AND c.created_at >= $1 AND c.created_at < $2
        AND EXISTS (
          SELECT 1 FROM core.contracts co
          WHERE co.id = c.contract_id
            AND co.deleted_at IS NULL
            AND co.is_active = true`;
-  const params = [];
+  const params = [from, to];
+  let idx = 3;
   if (role === "owner") {
-    sql += ` AND co.created_by = $1`;
+    sql += ` AND co.created_by = $${idx++}`;
     params.push(user.id);
   } else if (role === "content_lead") {
-    sql += ` AND co.lead_by = $1`;
+    sql += ` AND co.lead_by = $${idx++}`;
     params.push(user.id);
   }
   sql += `

@@ -20,7 +20,10 @@ const pool = new Pool({
   connectionTimeoutMillis: 2000,
 });
 
-pool.on("connect", () => {
+pool.on("connect", (client) => {
+  client.query("SET TIME ZONE 'Asia/Jakarta'").catch((err) => {
+    logger.error("Failed to set timezone on connect", { error: err.message });
+  });
   logger.info("[DB] Client connected to PostgreSQL");
 });
 

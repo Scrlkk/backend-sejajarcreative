@@ -77,7 +77,7 @@ export const getChartByMetric = async (user, role, query) => {
     case "content_by_status_date":
       return contentLeadService.getContentByStatusDateChart(user, role, query);
     case "pillars_usage":
-      return contentLeadService.getPillarsUsageChart(user, role);
+      return contentLeadService.getPillarsUsageChart(user, role, query);
     case "tasks_by_status":
       // superadmin: null → semua task; staff: userId → task miliknya
       return staffService.getTasksByStatusChart(role === "superadmin" ? null : user.id);
