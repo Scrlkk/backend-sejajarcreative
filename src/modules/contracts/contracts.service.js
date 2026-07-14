@@ -325,6 +325,22 @@ export const update = async (id, fields, user) => {
         } catch (err) {
           console.error("Failed to send contract status update notification:", err.message);
         }
+      } else if (
+        normalizedStatus === "active" &&
+        ["completed", "cancelled"].includes((existing.status || "").toLowerCase())
+      ) {
+        try {
+          await createNotification(null, {
+            recipient_id: updatedContract.lead_by,
+            sender_id: user.id || null,
+            title: "Kontrak Diaktifkan Kembali",
+            message: `Kontrak "${updatedContract.contract_name}" (${updatedContract.contract_code}) telah diaktifkan kembali.`,
+            source_type: "contract",
+            source_id: id,
+          });
+        } catch (err) {
+          console.error("Failed to send contract reactivation notification:", err.message);
+        }
       }
     }
 

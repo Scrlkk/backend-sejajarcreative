@@ -12,7 +12,7 @@ import {
 const selectTasksBase = `
   SELECT t.*, c.title AS content_title, c.contract_id, c.format AS content_format,
          c.status AS content_status, c.due_date AS content_due_date, c.scheduled_at AS content_scheduled_at,
-         u.full_name AS assignee_name, ct.contract_name,
+         u.full_name AS assignee_name, ct.contract_name, ct.status AS contract_status,
          pl.platform_name, pl.color_key AS platform_color_key, cc.type_name AS category_name,
          u2.full_name AS lead_name, ct.lead_by AS lead_id, ct.created_by AS contract_created_by,
          (

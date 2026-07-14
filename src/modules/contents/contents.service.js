@@ -14,6 +14,7 @@ const listSelect = `
          cc.color_key AS category_color_key,
          co.contract_name,
          co.contract_code,
+         co.status AS contract_status,
          co.created_by AS contract_created_by,
          co.lead_by AS contract_lead_by,
          (SELECT cr.feedback 

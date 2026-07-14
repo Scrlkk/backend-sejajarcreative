@@ -46,7 +46,7 @@ const ALLOWED_UPDATE_FIELDS = {
   "core.content_reviews": ["notes", "status"],
   "core.task_outputs": ["caption", "hashtag", "file_url"],
   "core.task_comments": ["message"],
-  "core.pillars": ["pillar_name", "description", "is_active"],
+  "core.pillars": ["pillar_name", "description", "color_key", "is_active"],
   "core.platforms": ["platform_name", "color_key", "is_active"],
   "core.content_category": ["type_name", "color_key", "is_active"],
   "public.portfolio_items": ["is_featured", "display_order"],
